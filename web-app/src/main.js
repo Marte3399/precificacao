@@ -21,15 +21,55 @@ const multilinePlaceholders = new Set([
 ]);
 
 const paragraphFormattingRules = {
-  SOLICITACAO2: { alignLeft: true, clearColor: true },
-  FUNCIONALIDADES3: { alignLeft: true, clearColor: true },
-  ATIVIDADES4: { alignLeft: true, clearColor: true },
-  OUTRAS5: { alignLeft: true, clearColor: true }
+  SOLICITACAO2: { alignLeft: true, clearColor: true, normalizeTypography: true },
+  FUNCIONALIDADES3: { alignLeft: true, clearColor: true, normalizeTypography: true },
+  ATIVIDADES4: { alignLeft: true, clearColor: true, normalizeTypography: true },
+  OUTRAS5: { alignLeft: true, clearColor: true, normalizeTypography: true }
 };
 
 const WORD_MAIN_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const XML_NS = 'http://www.w3.org/XML/1998/namespace';
 const TOTAL_ROW_SHADING = 'c9ab83';
+const WORD_DEFAULT_FONT_FAMILY = 'Calibri';
+const WORD_DEFAULT_FONT_SIZE = '22'; // half-points (22 = 11pt)
+
+function ensureRunProperties(run, xmlDoc) {
+  let rPr = Array.from(run.childNodes).find((child) => child.nodeName === 'w:rPr');
+  if (!rPr) {
+    rPr = xmlDoc.createElement('w:rPr');
+    run.insertBefore(rPr, run.firstChild);
+  }
+  return rPr;
+}
+
+function setRunFontStyle(run, xmlDoc) {
+  const rPr = ensureRunProperties(run, xmlDoc);
+
+  let rFonts = Array.from(rPr.childNodes).find((child) => child.nodeName === 'w:rFonts');
+  if (!rFonts) {
+    rFonts = xmlDoc.createElement('w:rFonts');
+    rPr.appendChild(rFonts);
+  }
+  rFonts.setAttribute('w:ascii', WORD_DEFAULT_FONT_FAMILY);
+  rFonts.setAttribute('w:hAnsi', WORD_DEFAULT_FONT_FAMILY);
+  rFonts.setAttribute('w:cs', WORD_DEFAULT_FONT_FAMILY);
+
+  let sz = Array.from(rPr.childNodes).find((child) => child.nodeName === 'w:sz');
+  if (!sz) {
+    sz = xmlDoc.createElement('w:sz');
+    rPr.appendChild(sz);
+  }
+  sz.setAttribute('w:val', WORD_DEFAULT_FONT_SIZE);
+
+  let szCs = Array.from(rPr.childNodes).find((child) => child.nodeName === 'w:szCs');
+  if (!szCs) {
+    szCs = xmlDoc.createElement('w:szCs');
+    rPr.appendChild(szCs);
+  }
+  szCs.setAttribute('w:val', WORD_DEFAULT_FONT_SIZE);
+
+  return rPr;
+}
 
 function createWordParagraph(xmlDoc, text = '', { bold = false, align } = {}) {
   const paragraph = xmlDoc.createElementNS(WORD_MAIN_NS, 'w:p');
@@ -49,10 +89,10 @@ function createWordParagraph(xmlDoc, text = '', { bold = false, align } = {}) {
 
   lines.forEach((line, index) => {
     const run = xmlDoc.createElementNS(WORD_MAIN_NS, 'w:r');
+    setRunFontStyle(run, xmlDoc);
     if (bold) {
-      const rPr = xmlDoc.createElementNS(WORD_MAIN_NS, 'w:rPr');
+      const rPr = ensureRunProperties(run, xmlDoc);
       rPr.appendChild(xmlDoc.createElementNS(WORD_MAIN_NS, 'w:b'));
-      run.appendChild(rPr);
     }
     const textElement = xmlDoc.createElementNS(WORD_MAIN_NS, 'w:t');
     if (/^\s|\s$/.test(line)) {
@@ -1041,7 +1081,7 @@ function replacePlaceholderInXmlDoc(xmlDoc, placeholder, value) {
   }
 }
 
-function applyParagraphFormatting(paragraph, xmlDoc, { alignLeft, clearColor }) {
+function applyParagraphFormatting(paragraph, xmlDoc, { alignLeft, clearColor, normalizeTypography }) {
   if (!paragraph || paragraph.nodeName !== 'w:p') return;
 
   if (alignLeft) {
@@ -1058,13 +1098,27 @@ function applyParagraphFormatting(paragraph, xmlDoc, { alignLeft, clearColor }) 
     jc.setAttribute('w:val', 'left');
   }
 
-  if (clearColor) {
+  if (clearColor || normalizeTypography) {
     const runs = paragraph.getElementsByTagName('w:r');
     Array.from(runs).forEach((run) => {
       const rPr = Array.from(run.childNodes).find((child) => child.nodeName === 'w:rPr');
       if (rPr) {
-        const colorNodes = Array.from(rPr.childNodes).filter((child) => child.nodeName === 'w:color');
-        colorNodes.forEach((colorNode) => rPr.removeChild(colorNode));
+        if (clearColor) {
+          const colorNodes = Array.from(rPr.childNodes).filter((child) => child.nodeName === 'w:color');
+          colorNodes.forEach((colorNode) => rPr.removeChild(colorNode));
+        }
+
+        if (normalizeTypography) {
+          const formattingNodesToRemove = ['w:b', 'w:bCs', 'w:i', 'w:iCs', 'w:u', 'w:highlight', 'w:shd'];
+          formattingNodesToRemove.forEach((nodeName) => {
+            const nodes = Array.from(rPr.childNodes).filter((child) => child.nodeName === nodeName);
+            nodes.forEach((node) => rPr.removeChild(node));
+          });
+        }
+      }
+
+      if (normalizeTypography) {
+        setRunFontStyle(run, xmlDoc);
       }
     });
   }

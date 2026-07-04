@@ -376,11 +376,19 @@ button.secondary {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  min-width: 0;
 }
 
 .summary-card strong {
   font-size: 1.4rem;
   color: var(--primary-dark);
+}
+
+.summary-card span,
+.summary-card small,
+.summary-card li {
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .finance-table {
