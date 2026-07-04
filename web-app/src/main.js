@@ -32,6 +32,7 @@ const XML_NS = 'http://www.w3.org/XML/1998/namespace';
 const TOTAL_ROW_SHADING = 'c9ab83';
 const WORD_DEFAULT_FONT_FAMILY = 'Calibri';
 const WORD_DEFAULT_FONT_SIZE = '22'; // half-points (22 = 11pt)
+const REFERENCE_BODY_TEXT_FRAGMENT = 'o s-codes, é um sistema informatizado';
 
 function ensureRunProperties(run, xmlDoc) {
   let rPr = Array.from(run.childNodes).find((child) => child.nodeName === 'w:rPr');
@@ -284,6 +285,63 @@ function findParagraphByText(xmlDoc, targetText) {
     }
   }
   return null;
+}
+
+function findParagraphContainingText(xmlDoc, targetFragment) {
+  const paragraphs = xmlDoc.getElementsByTagName('w:p');
+  const normalizedTarget = targetFragment.toLowerCase();
+  for (let i = 0; i < paragraphs.length; i += 1) {
+    const text = getParagraphText(paragraphs[i]).trim().toLowerCase();
+    if (text.includes(normalizedTarget)) {
+      return paragraphs[i];
+    }
+  }
+  return null;
+}
+
+function applyParagraphStyle(paragraph, xmlDoc, styleId) {
+  if (!styleId) return;
+  let pPr = Array.from(paragraph.childNodes).find((child) => child.nodeName === 'w:pPr');
+  if (!pPr) {
+    pPr = xmlDoc.createElement('w:pPr');
+    paragraph.insertBefore(pPr, paragraph.firstChild);
+  }
+
+  let pStyle = Array.from(pPr.childNodes).find((child) => child.nodeName === 'w:pStyle');
+  if (!pStyle) {
+    pStyle = xmlDoc.createElement('w:pStyle');
+    pPr.appendChild(pStyle);
+  }
+
+  pStyle.setAttribute('w:val', styleId);
+}
+
+function extractReferenceTypography(xmlDoc) {
+  const referenceParagraph = findParagraphContainingText(xmlDoc, REFERENCE_BODY_TEXT_FRAGMENT);
+  if (!referenceParagraph) {
+    return {};
+  }
+
+  const pPr = Array.from(referenceParagraph.childNodes).find((child) => child.nodeName === 'w:pPr');
+  const pStyle = pPr
+    ? Array.from(pPr.childNodes).find((child) => child.nodeName === 'w:pStyle')
+    : null;
+  const paragraphStyleId = pStyle?.getAttribute('w:val') || pStyle?.getAttribute('val') || '';
+
+  const runNodes = referenceParagraph.getElementsByTagName('w:r');
+  let runProperties = null;
+  for (let i = 0; i < runNodes.length; i += 1) {
+    const rPr = Array.from(runNodes[i].childNodes).find((child) => child.nodeName === 'w:rPr');
+    if (rPr) {
+      runProperties = rPr.cloneNode(true);
+      break;
+    }
+  }
+
+  return {
+    paragraphStyleId,
+    runProperties
+  };
 }
 
 function insertAfterReference(referenceNode, newNodes) {
@@ -1042,7 +1100,7 @@ function collectTextSegments(xmlDoc) {
   return { segments, combined };
 }
 
-function replacePlaceholderInXmlDoc(xmlDoc, placeholder, value) {
+function replacePlaceholderInXmlDoc(xmlDoc, placeholder, value, referenceTypography) {
   if (!placeholder) return;
   const affectedParagraphs = new Set();
 
@@ -1077,11 +1135,13 @@ function replacePlaceholderInXmlDoc(xmlDoc, placeholder, value) {
 
   const formatting = paragraphFormattingRules[placeholder];
   if (formatting && affectedParagraphs.size) {
-    affectedParagraphs.forEach((paragraph) => applyParagraphFormatting(paragraph, xmlDoc, formatting));
+    affectedParagraphs.forEach((paragraph) =>
+      applyParagraphFormatting(paragraph, xmlDoc, formatting, referenceTypography)
+    );
   }
 }
 
-function applyParagraphFormatting(paragraph, xmlDoc, { alignLeft, clearColor, normalizeTypography }) {
+function applyParagraphFormatting(paragraph, xmlDoc, { alignLeft, clearColor, normalizeTypography }, referenceTypography = {}) {
   if (!paragraph || paragraph.nodeName !== 'w:p') return;
 
   if (alignLeft) {
@@ -1098,27 +1158,34 @@ function applyParagraphFormatting(paragraph, xmlDoc, { alignLeft, clearColor, no
     jc.setAttribute('w:val', 'left');
   }
 
+  if (normalizeTypography && referenceTypography.paragraphStyleId) {
+    applyParagraphStyle(paragraph, xmlDoc, referenceTypography.paragraphStyleId);
+  }
+
   if (clearColor || normalizeTypography) {
     const runs = paragraph.getElementsByTagName('w:r');
     Array.from(runs).forEach((run) => {
-      const rPr = Array.from(run.childNodes).find((child) => child.nodeName === 'w:rPr');
-      if (rPr) {
-        if (clearColor) {
-          const colorNodes = Array.from(rPr.childNodes).filter((child) => child.nodeName === 'w:color');
-          colorNodes.forEach((colorNode) => rPr.removeChild(colorNode));
-        }
-
-        if (normalizeTypography) {
-          const formattingNodesToRemove = ['w:b', 'w:bCs', 'w:i', 'w:iCs', 'w:u', 'w:highlight', 'w:shd'];
-          formattingNodesToRemove.forEach((nodeName) => {
-            const nodes = Array.from(rPr.childNodes).filter((child) => child.nodeName === nodeName);
-            nodes.forEach((node) => rPr.removeChild(node));
+      if (normalizeTypography) {
+        const runStyleTemplate = referenceTypography.runProperties;
+        const rPr = ensureRunProperties(run, xmlDoc);
+        if (runStyleTemplate) {
+          while (rPr.firstChild) {
+            rPr.removeChild(rPr.firstChild);
+          }
+          Array.from(runStyleTemplate.childNodes).forEach((child) => {
+            rPr.appendChild(child.cloneNode(true));
           });
+        } else {
+          setRunFontStyle(run, xmlDoc);
         }
       }
 
-      if (normalizeTypography) {
-        setRunFontStyle(run, xmlDoc);
+      if (clearColor) {
+        const rPr = Array.from(run.childNodes).find((child) => child.nodeName === 'w:rPr');
+        if (rPr) {
+          const colorNodes = Array.from(rPr.childNodes).filter((child) => child.nodeName === 'w:color');
+          colorNodes.forEach((colorNode) => rPr.removeChild(colorNode));
+        }
       }
     });
   }
@@ -1131,9 +1198,11 @@ function applyReplacementsWithDom(xml, replacements, documentData) {
     throw new Error('Falha ao interpretar o modelo Word.');
   }
 
+  const referenceTypography = extractReferenceTypography(xmlDoc);
+
   Object.entries(replacements).forEach(([placeholder, value]) => {
     const normalized = normalizePlaceholderValue(value, placeholder);
-    replacePlaceholderInXmlDoc(xmlDoc, placeholder, normalized);
+    replacePlaceholderInXmlDoc(xmlDoc, placeholder, normalized, referenceTypography);
   });
 
   convertNewlinesToWordBreaks(xmlDoc);
