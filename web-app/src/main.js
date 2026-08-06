@@ -401,6 +401,22 @@ function normalizeDescription(text) {
   return text.replace(/\s+/g, ' ').trim().toLowerCase();
 }
 
+function parseHoursValue(rawValue) {
+  if (rawValue == null || rawValue === '') return null;
+  const normalized = String(rawValue).replace(',', '.').trim();
+  const parsed = Number(normalized);
+  if (!Number.isFinite(parsed) || parsed <= 0) return null;
+  return parsed;
+}
+
+function formatHoursValue(value) {
+  if (!Number.isFinite(value)) return '';
+  return new Intl.NumberFormat('pt-BR', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2
+  }).format(value);
+}
+
 const state = {
   manualActivities: [],
   activities: [],
@@ -520,6 +536,10 @@ app.innerHTML = `
           <div class="activity-builder__group">
             <span>Selecione as horas</span>
             <div class="pill-group" id="horaButtons"></div>
+            <div class="manual-hours">
+              <label for="horaManualInput">Ou digite manualmente</label>
+              <input id="horaManualInput" type="text" inputmode="decimal" placeholder="Ex.: 5,5" />
+            </div>
           </div>
           <div class="activity-builder__actions">
             <button class="primary" id="btnAdicionarAtividade">Inserir atividade</button>
@@ -581,6 +601,7 @@ const previewOutput = document.querySelector('#previewOutput');
 const atividadeDescricaoInput = document.querySelector('#atividadeDescricao');
 const perfilButtonsContainer = document.querySelector('#perfilButtons');
 const horaButtonsContainer = document.querySelector('#horaButtons');
+const horaManualInput = document.querySelector('#horaManualInput');
 const btnAdicionarAtividade = document.querySelector('#btnAdicionarAtividade');
 
 function ensureHoursLength() {
@@ -618,6 +639,7 @@ function renderHoraButtons() {
     button.textContent = `${option}h`;
     button.addEventListener('click', () => {
       builderState.hours = builderState.hours === option ? null : option;
+      horaManualInput.value = builderState.hours === null ? '' : formatHoursValue(builderState.hours);
       renderHoraButtons();
     });
     horaButtonsContainer.appendChild(button);
@@ -628,6 +650,7 @@ function resetBuilderSelections(options = {}) {
   const { preserveEditing = false } = options;
   builderState.profile = null;
   builderState.hours = null;
+  horaManualInput.value = '';
   renderPerfilButtons();
   renderHoraButtons();
   if (!preserveEditing) {
@@ -1279,6 +1302,16 @@ async function handleGenerate() {
 btnAdicionarAtividade.addEventListener('click', handleAddActivity);
 document.querySelector('#gordura').addEventListener('input', refreshSummaries);
 document.querySelector('#btnGerar').addEventListener('click', handleGenerate);
+horaManualInput.addEventListener('input', () => {
+  builderState.hours = parseHoursValue(horaManualInput.value);
+  renderHoraButtons();
+});
+horaManualInput.addEventListener('blur', () => {
+  const parsed = parseHoursValue(horaManualInput.value);
+  builderState.hours = parsed;
+  horaManualInput.value = parsed === null ? '' : formatHoursValue(parsed);
+  renderHoraButtons();
+});
 ['solicitacaoCliente', 'funcionalidadesAfetadas', 'outrasInformacoes'].forEach((id) => {
   document.querySelector(`#${id}`).addEventListener('input', () => refreshSummaries());
 });

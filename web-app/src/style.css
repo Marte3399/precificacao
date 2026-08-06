@@ -107,6 +107,17 @@ body {
   color: var(--text-light);
 }
 
+.manual-hours {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 220px;
+}
+
+.manual-hours label {
+  margin-bottom: 0;
+}
+
 .activity-builder__actions {
   display: flex;
   flex-wrap: wrap;
