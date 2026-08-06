@@ -382,7 +382,7 @@ const fixedActivities = [
   'Implantação em Produção.'
 ];
 
-const hourOptions = [1, 2, 3, 4];
+const hourOptions = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
 const ICONS = {
   trash: '🗑',
