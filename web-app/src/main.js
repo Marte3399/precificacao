@@ -819,7 +819,8 @@ function getStatusReportClass(statusValue) {
 function getDailyReportTheme(systemKey) {
   const themes = {
     scode: { titleBg: '#2d8ec3' },
-    siai: { titleBg: '#6f569d' }
+    siai: { titleBg: '#6f569d' },
+    sani: { titleBg: '#1fae61' }
   };
   return themes[systemKey] || { titleBg: '#2d8ec3' };
 }
