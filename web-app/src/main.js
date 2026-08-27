@@ -1387,6 +1387,7 @@ function renderDailyGrid() {
       });
       td.addEventListener('blur', () => {
         saveDailyRows();
+        ensureEmptyTrailingRow(rowIndex);
       });
 
       tr.appendChild(td);
@@ -1396,8 +1397,28 @@ function renderDailyGrid() {
   });
 }
 
+function ensureEmptyTrailingRow(rowIndex) {
+  if (rowIndex !== dailyRows.length - 1) return;
+  if (isDailyRowCompletelyEmpty(dailyRows[rowIndex])) return;
+  const newRow = createEmptyDailyRow();
+  const monthValue = dailyGridFilterMonth.value;
+  if (monthValue) {
+    const [year, month] = monthValue.split('-');
+    newRow.entrada = `01/${month}/${year}`;
+  }
+  dailyRows.push(newRow);
+  saveDailyRows();
+  renderDailyGrid();
+}
+
 function addDailyRow() {
-  dailyRows.push(createEmptyDailyRow());
+  const newRow = createEmptyDailyRow();
+  const monthValue = dailyGridFilterMonth.value;
+  if (monthValue) {
+    const [year, month] = monthValue.split('-');
+    newRow.entrada = `01/${month}/${year}`;
+  }
+  dailyRows.push(newRow);
   saveDailyRows();
   renderDailyGrid();
 }
