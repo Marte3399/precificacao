@@ -495,7 +495,12 @@ app.innerHTML = `
       <h1>Precificação e Geração de Estimativas</h1>
       <p>Preencha os dados do ticket, distribua as horas por perfil e gere automaticamente o documento Word pronto para envio.</p>
     </header>
+    <nav class="top-menu" aria-label="Módulos do sistema">
+      <button type="button" class="top-menu__item top-menu__item--active" data-module="precificacao">Precificação</button>
+      <button type="button" class="top-menu__item" data-module="daily">Planilha da Daily</button>
+    </nav>
     <main class="content">
+      <section class="module-view module-view--active" data-module-view="precificacao">
       <section class="section">
         <h2>Dados do Ticket</h2>
         <div class="field-grid">
@@ -588,6 +593,42 @@ app.innerHTML = `
       <div class="actions">
         <button class="primary" id="btnGerar">Gerar documento Word</button>
       </div>
+      </section>
+
+      <section class="module-view" data-module-view="daily">
+        <section class="section">
+          <h2>Planilha da Daily</h2>
+          <p>Grid editável para acompanhamento diário. Clique em uma célula para editar.</p>
+          <div id="dailySystemTabs" class="daily-system-tabs" role="tablist" aria-label="Sistemas da daily">
+            <button type="button" class="daily-system-tab daily-system-tab--active" data-daily-system="scode">SCode</button>
+            <button type="button" class="daily-system-tab" data-daily-system="siai">SIAI</button>
+            <button type="button" class="daily-system-tab" data-daily-system="ctx">CTX</button>
+            <button type="button" class="daily-system-tab" data-daily-system="sani">Sani</button>
+            <button type="button" class="daily-system-tab" data-daily-system="sistrs">SISTRS</button>
+            <button type="button" class="daily-system-tab" data-daily-system="opm">OPM</button>
+            <button type="button" class="daily-system-tab" data-daily-system="outros">Outros</button>
+          </div>
+          <div class="daily-toolbar">
+            <button type="button" class="secondary" id="btnDailyAddRow">Adicionar linha</button>
+            <button type="button" class="secondary" id="btnDailySaveAll">Salvar planilha</button>
+            <button type="button" class="secondary" id="btnDailyReset">Limpar planilha</button>
+          </div>
+          <div class="daily-report-controls">
+            <label for="dailyReportMonth">Mês do relatório</label>
+            <input type="month" id="dailyReportMonth" />
+            <button type="button" class="secondary" id="btnDailyGenerateReport">Gerar relatório mensal</button>
+            <button type="button" class="secondary" id="btnDailyPrintReport">Imprimir relatório</button>
+          </div>
+          <div id="dailyColumnActions" class="daily-column-actions"></div>
+          <div class="daily-grid-wrap">
+            <table class="daily-grid" id="dailyGridTable">
+              <thead id="dailyGridHead"></thead>
+              <tbody id="dailyGridBody"></tbody>
+            </table>
+          </div>
+          <div id="dailyMonthlyReport" class="daily-monthly-report"></div>
+        </section>
+      </section>
     </main>
   </div>
 `;
@@ -603,6 +644,461 @@ const perfilButtonsContainer = document.querySelector('#perfilButtons');
 const horaButtonsContainer = document.querySelector('#horaButtons');
 const horaManualInput = document.querySelector('#horaManualInput');
 const btnAdicionarAtividade = document.querySelector('#btnAdicionarAtividade');
+const btnDailyAddRow = document.querySelector('#btnDailyAddRow');
+const btnDailySaveAll = document.querySelector('#btnDailySaveAll');
+const btnDailyReset = document.querySelector('#btnDailyReset');
+const btnDailyGenerateReport = document.querySelector('#btnDailyGenerateReport');
+const btnDailyPrintReport = document.querySelector('#btnDailyPrintReport');
+const dailyColumnActions = document.querySelector('#dailyColumnActions');
+const dailyGridHead = document.querySelector('#dailyGridHead');
+const dailyGridBody = document.querySelector('#dailyGridBody');
+const dailyReportMonthInput = document.querySelector('#dailyReportMonth');
+const dailyMonthlyReport = document.querySelector('#dailyMonthlyReport');
+const dailySystemButtons = Array.from(document.querySelectorAll('.daily-system-tab'));
+const moduleButtons = Array.from(document.querySelectorAll('.top-menu__item'));
+const moduleViews = Array.from(document.querySelectorAll('.module-view'));
+let activeModule = 'precificacao';
+
+const DAILY_COLUMN_STORAGE_PREFIX = 'precificacao.daily.column.';
+const DAILY_ROWS_STORAGE_PREFIX = 'precificacao.daily.grid.rows.v2.';
+const DAILY_MIN_ROWS = 20;
+const DAILY_LEGACY_STORAGE_KEY = 'precificacao.daily.grid.rows.v1';
+const dailySystems = [
+  { key: 'scode', label: 'SCode' },
+  { key: 'siai', label: 'SIAI' },
+  { key: 'ctx', label: 'CTX' },
+  { key: 'sani', label: 'Sani' },
+  { key: 'sistrs', label: 'SISTRS' },
+  { key: 'opm', label: 'OPM' },
+  { key: 'outros', label: 'Outros' }
+];
+let activeDailySystem = 'scode';
+
+const dailyColumns = [
+  { key: 'prioridade', label: 'Prioridade' },
+  { key: 'ticket', label: 'Ticket' },
+  { key: 'descricao', label: 'Descrição' },
+  { key: 'status', label: 'Status' },
+  { key: 'responsavel', label: 'Responsável' },
+  { key: 'entrada', label: 'Data Entrada' },
+  { key: 'prazo', label: 'Prazo' },
+  { key: 'entrega', label: 'Entrega' },
+  { key: 'observacoes', label: 'Observações' }
+];
+
+const monthNamesPtBr = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+const monthAbbreviationsPtBr = {
+  jan: 1,
+  fev: 2,
+  mar: 3,
+  abr: 4,
+  mai: 5,
+  jun: 6,
+  jul: 7,
+  ago: 8,
+  set: 9,
+  out: 10,
+  nov: 11,
+  dez: 12
+};
+
+let dailyRows = [];
+
+function setActiveModule(moduleName) {
+  activeModule = moduleName;
+  moduleButtons.forEach((button) => {
+    const isActive = button.dataset.module === moduleName;
+    button.classList.toggle('top-menu__item--active', isActive);
+    button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+  });
+  moduleViews.forEach((view) => {
+    view.classList.toggle('module-view--active', view.dataset.moduleView === moduleName);
+  });
+}
+
+function getDailyRowsStorageKey(systemKey = activeDailySystem) {
+  return `${DAILY_ROWS_STORAGE_PREFIX}${systemKey}`;
+}
+
+function getDailyColumnStorageKey(columnKey, systemKey = activeDailySystem) {
+  return `${DAILY_COLUMN_STORAGE_PREFIX}${systemKey}.${columnKey}`;
+}
+
+function setActiveDailySystem(systemKey) {
+  if (!dailySystems.some((item) => item.key === systemKey)) return;
+  activeDailySystem = systemKey;
+  dailySystemButtons.forEach((button) => {
+    const isActive = button.dataset.dailySystem === systemKey;
+    button.classList.toggle('daily-system-tab--active', isActive);
+    button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+  });
+  loadDailyRows();
+  renderDailyGrid();
+  renderDailyColumnActions();
+}
+
+function createEmptyDailyRow() {
+  const row = {};
+  dailyColumns.forEach((column) => {
+    row[column.key] = '';
+  });
+  return row;
+}
+
+function ensureDailyMinimumRows() {
+  while (dailyRows.length < DAILY_MIN_ROWS) {
+    dailyRows.push(createEmptyDailyRow());
+  }
+}
+
+function saveDailyRows() {
+  localStorage.setItem(getDailyRowsStorageKey(), JSON.stringify(dailyRows));
+}
+
+function saveDailyColumn(columnKey) {
+  const values = dailyRows.map((row) => row[columnKey] || '');
+  localStorage.setItem(getDailyColumnStorageKey(columnKey), JSON.stringify(values));
+}
+
+function escapeHtml(text) {
+  return String(text ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
+function parseMonthKeyFromDateValue(value) {
+  const raw = String(value || '').trim().toLowerCase();
+  if (!raw) return null;
+
+  let match = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  if (match) {
+    const month = Number(match[2]);
+    let year = Number(match[3]);
+    if (Number.isNaN(month) || month < 1 || month > 12) return null;
+    if (year < 100) year += 2000;
+    return `${year}-${String(month).padStart(2, '0')}`;
+  }
+
+  match = raw.match(/^(\d{1,2})\/([a-zç]{3})\/(\d{2,4})$/);
+  if (match) {
+    const month = monthAbbreviationsPtBr[match[2]];
+    if (!month) return null;
+    let year = Number(match[3]);
+    if (year < 100) year += 2000;
+    return `${year}-${String(month).padStart(2, '0')}`;
+  }
+
+  match = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (match) {
+    return `${match[1]}-${match[2]}`;
+  }
+
+  return null;
+}
+
+function formatMonthLabel(monthKey) {
+  if (!monthKey || !/^\d{4}-\d{2}$/.test(monthKey)) return '';
+  const [yearRaw, monthRaw] = monthKey.split('-');
+  const monthIndex = Number(monthRaw) - 1;
+  if (monthIndex < 0 || monthIndex > 11) return monthKey;
+  return `${monthNamesPtBr[monthIndex]} de ${yearRaw}`;
+}
+
+function getStatusReportClass(statusValue) {
+  const normalized = String(statusValue || '').trim().toLowerCase();
+  if (normalized.includes('finaliz')) return 'is-done';
+  if (normalized.includes('andamento') || normalized.includes('progresso')) return 'is-progress';
+  if (normalized.includes('bloque')) return 'is-blocked';
+  if (normalized.includes('iniciado')) return 'is-not-started';
+  return '';
+}
+
+function isDailyIgnoredRow(row) {
+  return dailyColumns.some((column) => String(row?.[column.key] || '').toUpperCase().includes('#VALOR!'));
+}
+
+function getMonthlyReportRows(monthKey) {
+  return dailyRows
+    .filter((row) => {
+      if (isDailyIgnoredRow(row)) return false;
+      if (!String(row.ticket || '').trim()) return false;
+      const rowMonth = parseMonthKeyFromDateValue(row.entrada);
+      return rowMonth === monthKey;
+    })
+    .map((row) => ({
+      ticket: String(row.ticket || '').trim(),
+      prioridade: String(row.prioridade || '').trim(),
+      status: String(row.status || '').trim(),
+      inicio: String(row.entrada || '').trim(),
+      termino: String(row.prazo || '').trim(),
+      statusClass: getStatusReportClass(row.status)
+    }));
+}
+
+function renderDailyMonthlyReport() {
+  const selectedMonth = dailyReportMonthInput.value;
+  if (!selectedMonth) {
+    alert('Selecione o mês para gerar o relatório.');
+    return;
+  }
+
+  const currentSystem = dailySystems.find((item) => item.key === activeDailySystem);
+  const systemLabel = currentSystem?.label || activeDailySystem.toUpperCase();
+  const monthLabel = formatMonthLabel(selectedMonth);
+  const reportRows = getMonthlyReportRows(selectedMonth);
+
+  const rowsHtml = reportRows.length
+    ? reportRows
+        .map(
+          (row) => `
+            <tr>
+              <td>${escapeHtml(row.ticket)}</td>
+              <td>${escapeHtml(row.prioridade)}</td>
+              <td class="${row.statusClass}">${escapeHtml(row.status)}</td>
+              <td>${escapeHtml(row.inicio)}</td>
+              <td>${escapeHtml(row.termino)}</td>
+            </tr>
+          `
+        )
+        .join('')
+    : `
+      <tr>
+        <td colspan="5" class="daily-report-empty">Nenhum registro encontrado para ${escapeHtml(monthLabel)}.</td>
+      </tr>
+    `;
+
+  dailyMonthlyReport.innerHTML = `
+    <section class="daily-report-card">
+      <div class="daily-report-card__title">● ${escapeHtml(systemLabel)}</div>
+      <table class="daily-report-table">
+        <thead>
+          <tr>
+            <th>Ticket / Tarefa</th>
+            <th>Prioridade</th>
+            <th>Status</th>
+            <th>Data Início</th>
+            <th>Data Término</th>
+          </tr>
+        </thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>
+    </section>
+  `;
+}
+
+function printDailyMonthlyReport() {
+  if (!dailyMonthlyReport.innerHTML.trim()) {
+    alert('Gere o relatório mensal antes de imprimir.');
+    return;
+  }
+
+  const printWindow = window.open('', '_blank', 'width=1200,height=800');
+  if (!printWindow) {
+    alert('Não foi possível abrir a janela de impressão. Verifique se o navegador bloqueou pop-up.');
+    return;
+  }
+
+  printWindow.document.write(`
+    <!doctype html>
+    <html lang="pt-BR">
+      <head>
+        <meta charset="UTF-8" />
+        <title>Relatório Mensal Daily</title>
+        <style>
+          body { margin: 0; padding: 24px; background: #fff; font-family: Arial, Helvetica, sans-serif; }
+          .daily-report-card { border: 1px solid #1c2d4f; }
+          .daily-report-card__title { background: #1f8f95; color: #fff; font-weight: 700; padding: 6px 10px; font-size: 18px; }
+          .daily-report-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+          .daily-report-table th, .daily-report-table td { border: 1px solid #1c2d4f; padding: 6px 8px; font-size: 14px; }
+          .daily-report-table th { background: #1f3e67; color: #fff; text-align: center; }
+          .daily-report-table td { background: #dce5ef; }
+          .daily-report-table tbody tr:nth-child(even) td { background: #f2f4f8; }
+          .daily-report-table td:nth-child(1) { width: 40%; }
+          .daily-report-table td:nth-child(2) { width: 10%; text-align: center; font-weight: 700; }
+          .daily-report-table td:nth-child(3) { width: 14%; font-weight: 700; }
+          .daily-report-table td:nth-child(4), .daily-report-table td:nth-child(5) { width: 18%; text-align: center; }
+          .daily-report-table td.is-done { background: #00b050 !important; color: #000; }
+          .daily-report-table td.is-progress { background: #00b0f0 !important; color: #000; }
+          .daily-report-table td.is-blocked { background: #ff4d4d !important; color: #fff; }
+          .daily-report-table td.is-not-started { background: #ffd966 !important; color: #7c5a00; }
+          .daily-report-empty { text-align: center; font-style: italic; }
+        </style>
+      </head>
+      <body>
+        ${dailyMonthlyReport.innerHTML}
+      </body>
+    </html>
+  `);
+  printWindow.document.close();
+  printWindow.focus();
+  printWindow.print();
+}
+
+function loadDailyRows() {
+  dailyRows = [];
+  try {
+    const storedRowsRaw = localStorage.getItem(getDailyRowsStorageKey());
+    if (storedRowsRaw) {
+      const parsed = JSON.parse(storedRowsRaw);
+      if (Array.isArray(parsed)) {
+        dailyRows = parsed.map((row) => {
+          const normalized = createEmptyDailyRow();
+          dailyColumns.forEach((column) => {
+            normalized[column.key] = row?.[column.key] == null ? '' : String(row[column.key]);
+          });
+          return normalized;
+        });
+      }
+    }
+
+    if (!storedRowsRaw && activeDailySystem === 'scode') {
+      const legacyRaw = localStorage.getItem(DAILY_LEGACY_STORAGE_KEY);
+      if (legacyRaw) {
+        const parsedLegacy = JSON.parse(legacyRaw);
+        if (Array.isArray(parsedLegacy)) {
+          dailyRows = parsedLegacy.map((row) => {
+            const normalized = createEmptyDailyRow();
+            dailyColumns.forEach((column) => {
+              normalized[column.key] = row?.[column.key] == null ? '' : String(row[column.key]);
+            });
+            return normalized;
+          });
+        }
+      }
+    }
+
+    if (!dailyRows.length) {
+      dailyRows = new Array(DAILY_MIN_ROWS).fill(null).map(() => createEmptyDailyRow());
+    }
+
+    dailyColumns.forEach((column) => {
+      const columnRaw = localStorage.getItem(getDailyColumnStorageKey(column.key));
+      if (!columnRaw) return;
+      const values = JSON.parse(columnRaw);
+      if (!Array.isArray(values)) return;
+      values.forEach((value, rowIndex) => {
+        if (!dailyRows[rowIndex]) {
+          dailyRows[rowIndex] = createEmptyDailyRow();
+        }
+        dailyRows[rowIndex][column.key] = value == null ? '' : String(value);
+      });
+    });
+  } catch (error) {
+    console.error('Falha ao carregar grade da daily:', error);
+    dailyRows = new Array(DAILY_MIN_ROWS).fill(null).map(() => createEmptyDailyRow());
+  }
+
+  ensureDailyMinimumRows();
+}
+
+function getStatusClass(statusValue) {
+  const normalized = String(statusValue || '').trim().toLowerCase();
+  if (normalized.includes('finaliz')) return 'daily-status--done';
+  if (normalized.includes('andamento') || normalized.includes('progresso')) return 'daily-status--progress';
+  if (normalized.includes('bloque')) return 'daily-status--blocked';
+  if (normalized.includes('iniciado')) return 'daily-status--not-started';
+  return '';
+}
+
+function renderDailyColumnActions() {
+  dailyColumnActions.innerHTML = '';
+  const currentSystem = dailySystems.find((item) => item.key === activeDailySystem);
+  dailyColumns.forEach((column) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'pill-btn';
+    button.textContent = `Salvar ${column.label} (${currentSystem?.label || activeDailySystem})`;
+    button.addEventListener('click', () => {
+      saveDailyColumn(column.key);
+    });
+    dailyColumnActions.appendChild(button);
+  });
+}
+
+function updateDailyCell(rowIndex, columnKey, value) {
+  if (!dailyRows[rowIndex]) return;
+  dailyRows[rowIndex][columnKey] = value;
+  saveDailyRows();
+}
+
+function renderDailyGrid() {
+  dailyGridHead.innerHTML = '';
+  dailyGridBody.innerHTML = '';
+
+  const headRow = document.createElement('tr');
+  const indexHeader = document.createElement('th');
+  indexHeader.textContent = '#';
+  headRow.appendChild(indexHeader);
+  dailyColumns.forEach((column) => {
+    const th = document.createElement('th');
+    th.textContent = column.label;
+    headRow.appendChild(th);
+  });
+  dailyGridHead.appendChild(headRow);
+
+  dailyRows.forEach((row, rowIndex) => {
+    const tr = document.createElement('tr');
+    const indexCell = document.createElement('td');
+    indexCell.className = 'daily-row-index';
+    indexCell.textContent = String(rowIndex + 1);
+    tr.appendChild(indexCell);
+
+    dailyColumns.forEach((column) => {
+      const td = document.createElement('td');
+      td.contentEditable = 'true';
+      td.spellcheck = false;
+      td.textContent = row[column.key] || '';
+      td.dataset.row = String(rowIndex);
+      td.dataset.column = column.key;
+
+      if (column.key === 'status') {
+        const statusClass = getStatusClass(row[column.key]);
+        if (statusClass) {
+          td.classList.add(statusClass);
+        }
+      }
+
+      td.addEventListener('input', () => {
+        const text = td.textContent || '';
+        updateDailyCell(rowIndex, column.key, text);
+        if (column.key === 'status') {
+          td.classList.remove('daily-status--done', 'daily-status--progress', 'daily-status--blocked', 'daily-status--not-started');
+          const nextClass = getStatusClass(text);
+          if (nextClass) td.classList.add(nextClass);
+        }
+      });
+      td.addEventListener('blur', () => {
+        saveDailyColumn(column.key);
+      });
+
+      tr.appendChild(td);
+    });
+
+    dailyGridBody.appendChild(tr);
+  });
+}
+
+function addDailyRow() {
+  dailyRows.push(createEmptyDailyRow());
+  saveDailyRows();
+  renderDailyGrid();
+}
+
+function resetDailyGrid() {
+  const currentSystem = dailySystems.find((item) => item.key === activeDailySystem);
+  const confirmed = window.confirm(`Deseja limpar toda a planilha da daily (${currentSystem?.label || activeDailySystem})?`);
+  if (!confirmed) return;
+
+  dailyRows = new Array(DAILY_MIN_ROWS).fill(null).map(() => createEmptyDailyRow());
+  saveDailyRows();
+  dailyColumns.forEach((column) => {
+    localStorage.removeItem(getDailyColumnStorageKey(column.key));
+  });
+  renderDailyGrid();
+}
 
 function ensureHoursLength() {
   profiles.forEach(({ key }) => {
@@ -1312,11 +1808,32 @@ horaManualInput.addEventListener('blur', () => {
   horaManualInput.value = parsed === null ? '' : formatHoursValue(parsed);
   renderHoraButtons();
 });
+moduleButtons.forEach((button) => {
+  button.addEventListener('click', () => {
+    setActiveModule(button.dataset.module);
+  });
+});
+dailySystemButtons.forEach((button) => {
+  button.addEventListener('click', () => {
+    setActiveDailySystem(button.dataset.dailySystem);
+  });
+});
+btnDailyAddRow.addEventListener('click', addDailyRow);
+btnDailySaveAll.addEventListener('click', () => {
+  saveDailyRows();
+  dailyColumns.forEach((column) => saveDailyColumn(column.key));
+});
+btnDailyReset.addEventListener('click', resetDailyGrid);
+btnDailyGenerateReport.addEventListener('click', renderDailyMonthlyReport);
+btnDailyPrintReport.addEventListener('click', printDailyMonthlyReport);
 ['solicitacaoCliente', 'funcionalidadesAfetadas', 'outrasInformacoes'].forEach((id) => {
   document.querySelector(`#${id}`).addEventListener('input', () => refreshSummaries());
 });
 
 // Inicialização
+setActiveModule(activeModule);
+setActiveDailySystem(activeDailySystem);
+dailyReportMonthInput.value = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
 renderPerfilButtons();
 renderHoraButtons();
 rebuildActivitiesList();

@@ -53,6 +53,49 @@ body {
   color: rgba(255, 255, 255, 0.85);
 }
 
+.top-menu {
+  display: flex;
+  gap: 10px;
+  padding: 14px 24px;
+  background: #eef4fb;
+  border-bottom: 1px solid var(--border);
+}
+
+.top-menu__item {
+  border: 1px solid #d0deee;
+  background: #fff;
+  color: var(--primary-dark);
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.top-menu__item:hover {
+  border-color: #9ab8da;
+}
+
+.top-menu__item--active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+  box-shadow: 0 8px 18px rgba(12, 123, 147, 0.3);
+}
+
+.module-view {
+  display: none;
+  flex-direction: column;
+  gap: 32px;
+}
+
+.module-view--active {
+  display: flex;
+}
+
 .content {
   padding: 32px 40px 48px;
   display: flex;
@@ -116,6 +159,222 @@ body {
 
 .manual-hours label {
   margin-bottom: 0;
+}
+
+.daily-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.daily-system-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.daily-system-tab {
+  border: 1px solid #cfdceb;
+  background: #fff;
+  color: #1f3954;
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.daily-system-tab--active {
+  background: #0c7b93;
+  border-color: #0c7b93;
+  color: #fff;
+}
+
+.daily-column-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.daily-report-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.daily-report-controls label {
+  margin-bottom: 0;
+}
+
+.daily-report-controls input[type="month"] {
+  max-width: 180px;
+}
+
+.daily-monthly-report {
+  margin-top: 8px;
+}
+
+.daily-report-card {
+  border: 1px solid #1c2d4f;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.daily-report-card__title {
+  background: #1f8f95;
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 700;
+  padding: 8px 12px;
+}
+
+.daily-report-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.daily-report-table th,
+.daily-report-table td {
+  border: 1px solid #1c2d4f;
+  padding: 7px 8px;
+  font-size: 0.84rem;
+}
+
+.daily-report-table th {
+  background: #1f3e67;
+  color: #fff;
+  text-align: center;
+  font-weight: 700;
+}
+
+.daily-report-table td {
+  background: #dce5ef;
+}
+
+.daily-report-table tbody tr:nth-child(even) td {
+  background: #f2f4f8;
+}
+
+.daily-report-table td:nth-child(1) {
+  width: 42%;
+}
+
+.daily-report-table td:nth-child(2) {
+  width: 10%;
+  text-align: center;
+  font-weight: 700;
+}
+
+.daily-report-table td:nth-child(3) {
+  width: 14%;
+  font-weight: 700;
+}
+
+.daily-report-table td:nth-child(4),
+.daily-report-table td:nth-child(5) {
+  width: 17%;
+  text-align: center;
+}
+
+.daily-report-table td.is-done {
+  background: #00b050 !important;
+  color: #000;
+}
+
+.daily-report-table td.is-progress {
+  background: #00b0f0 !important;
+  color: #000;
+}
+
+.daily-report-table td.is-blocked {
+  background: #ff4d4d !important;
+  color: #fff;
+}
+
+.daily-report-table td.is-not-started {
+  background: #ffd966 !important;
+  color: #7c5a00;
+}
+
+.daily-report-empty {
+  text-align: center;
+  font-style: italic;
+}
+
+.daily-grid-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: #fff;
+}
+
+.daily-grid {
+  width: 100%;
+  min-width: 980px;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.daily-grid th,
+.daily-grid td {
+  border: 1px solid #d6e1ed;
+  padding: 8px 10px;
+  vertical-align: top;
+  font-size: 0.86rem;
+  line-height: 1.35;
+}
+
+.daily-grid th {
+  background: #f3f7fc;
+  color: #29425c;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.daily-grid td {
+  background: #fff;
+  word-break: break-word;
+}
+
+.daily-grid td:focus {
+  outline: 2px solid rgba(12, 123, 147, 0.35);
+  outline-offset: -2px;
+  background: #f7fcff;
+}
+
+.daily-row-index {
+  text-align: center;
+  background: #f8fbff;
+  color: #4b5e73;
+  font-weight: 600;
+}
+
+.daily-status--done {
+  background: #16a34a !important;
+  color: #fff;
+  font-weight: 700;
+}
+
+.daily-status--progress {
+  background: #0ea5e9 !important;
+  color: #fff;
+  font-weight: 700;
+}
+
+.daily-status--blocked {
+  background: #ef4444 !important;
+  color: #fff;
+  font-weight: 700;
+}
+
+.daily-status--not-started {
+  background: #fde68a !important;
+  color: #7c5a00;
+  font-weight: 700;
 }
 
 .activity-builder__actions {
