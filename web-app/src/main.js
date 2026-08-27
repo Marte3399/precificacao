@@ -910,6 +910,8 @@ function printDailyMonthlyReport() {
     return;
   }
 
+  const reportTheme = getDailyReportTheme(activeDailySystem);
+
   printWindow.document.write(`
     <!doctype html>
     <html lang="pt-BR">
@@ -919,7 +921,7 @@ function printDailyMonthlyReport() {
         <style>
           body { margin: 0; padding: 24px; background: #fff; font-family: Arial, Helvetica, sans-serif; }
           .daily-report-card { border: 1px solid #1c2d4f; }
-          .daily-report-card__title { background: #2d8ec3; color: #fff; font-weight: 700; padding: 6px 10px; font-size: 18px; }
+          .daily-report-card__title { background: ${reportTheme.titleBg}; color: #fff; font-weight: 700; padding: 6px 10px; font-size: 18px; }
           .daily-report-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
           .daily-report-table th, .daily-report-table td { border: 1px solid #1c2d4f; padding: 6px 8px; font-size: 14px; }
           .daily-report-table th { background: #1f3e67; color: #fff; text-align: center; }
