@@ -679,14 +679,14 @@ let activeDailySystem = 'scode';
 
 const dailyColumns = [
   { key: 'prioridade', label: 'Prioridade' },
-  { key: 'ticket', label: 'Ticket' },
-  { key: 'descricao', label: 'Descrição' },
+  { key: 'ticket', label: 'Nome da tarefa' },
+  { key: 'descricao', label: 'Observação' },
   { key: 'status', label: 'Status' },
-  { key: 'responsavel', label: 'Responsável' },
-  { key: 'entrada', label: 'Data Entrada' },
-  { key: 'prazo', label: 'Prazo' },
-  { key: 'entrega', label: 'Entrega' },
-  { key: 'observacoes', label: 'Observações' }
+  { key: 'responsavel', label: 'Atribuído a' },
+  { key: 'entrada', label: 'Data de início' },
+  { key: 'prazo', label: 'Data do término' },
+  { key: 'entrega', label: 'Duração' },
+  { key: 'observacoes', label: 'Obs.' }
 ];
 
 const monthNamesPtBr = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
@@ -901,11 +901,15 @@ function getMonthlyReportRows(monthKey) {
       return rowMonth === monthKey;
     })
     .map((row) => ({
-      ticket: String(row.ticket || '').trim(),
       prioridade: String(row.prioridade || '').trim(),
+      ticket: String(row.ticket || '').trim(),
+      observacao: String(row.descricao || '').trim(),
       status: String(row.status || '').trim(),
+      atribuida: String(row.responsavel || '').trim(),
       inicio: String(row.entrada || '').trim(),
       termino: String(row.prazo || '').trim(),
+      duracao: String(row.entrega || '').trim(),
+      obs: String(row.observacoes || '').trim(),
       statusClass: getStatusReportClass(row.status)
     }));
 }
@@ -928,18 +932,22 @@ function renderDailyMonthlyReport() {
         .map(
           (row) => `
             <tr>
-              <td>${escapeHtml(row.ticket)}</td>
               <td>${escapeHtml(row.prioridade)}</td>
+              <td>${escapeHtml(row.ticket)}</td>
+              <td>${escapeHtml(row.observacao)}</td>
               <td class="${row.statusClass}">${escapeHtml(row.status)}</td>
+              <td>${escapeHtml(row.atribuida)}</td>
               <td>${escapeHtml(row.inicio)}</td>
               <td>${escapeHtml(row.termino)}</td>
+              <td>${escapeHtml(row.duracao)}</td>
+              <td>${escapeHtml(row.obs)}</td>
             </tr>
           `
         )
         .join('')
     : `
       <tr>
-        <td colspan="5" class="daily-report-empty">Nenhum registro encontrado para ${escapeHtml(monthLabel)}.</td>
+        <td colspan="9" class="daily-report-empty">Nenhum registro encontrado para ${escapeHtml(monthLabel)}.</td>
       </tr>
     `;
 
@@ -949,11 +957,15 @@ function renderDailyMonthlyReport() {
       <table class="daily-report-table">
         <thead>
           <tr>
-            <th>Ticket / Tarefa</th>
             <th>Prioridade</th>
+            <th>Nome da tarefa</th>
+            <th>Observação</th>
             <th>Status</th>
-            <th>Data Início</th>
-            <th>Data Término</th>
+            <th>Atribuído a</th>
+            <th>Data de início</th>
+            <th>Data do término</th>
+            <th>Duração</th>
+            <th>Obs.</th>
           </tr>
         </thead>
         <tbody>${rowsHtml}</tbody>
@@ -991,10 +1003,14 @@ function printDailyMonthlyReport() {
           .daily-report-table th { background: #1f3e67; color: #fff; text-align: center; }
           .daily-report-table td { background: #c9d5e4; }
           .daily-report-table tbody tr:nth-child(even) td { background: #ffffff; }
-          .daily-report-table td:nth-child(1) { width: 40%; }
-          .daily-report-table td:nth-child(2) { width: 10%; text-align: center; font-weight: 700; }
-          .daily-report-table td:nth-child(3) { width: 14%; font-weight: 700; }
-          .daily-report-table td:nth-child(4), .daily-report-table td:nth-child(5) { width: 18%; text-align: center; }
+          .daily-report-table td:nth-child(1) { width: 7%; }
+          .daily-report-table td:nth-child(2) { width: 22%; }
+          .daily-report-table td:nth-child(3) { width: 22%; }
+          .daily-report-table td:nth-child(4) { width: 11%; font-weight: 700; }
+          .daily-report-table td:nth-child(5) { width: 9%; }
+          .daily-report-table td:nth-child(6), .daily-report-table td:nth-child(7) { width: 10%; text-align: center; }
+          .daily-report-table td:nth-child(8) { width: 7%; text-align: center; }
+          .daily-report-table td:nth-child(9) { width: 12%; }
           .daily-report-table td.is-done { background: inherit !important; color: #000; }
           .daily-report-table td.is-progress { background: inherit !important; color: #000; }
           .daily-report-table td.is-blocked { background: inherit !important; color: #000; }
