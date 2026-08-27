@@ -223,7 +223,7 @@ body {
 }
 
 .daily-report-card__title {
-  background: #1f8f95;
+  background: #2d8ec3;
   color: #fff;
   font-size: 1rem;
   font-weight: 700;
@@ -251,11 +251,11 @@ body {
 }
 
 .daily-report-table td {
-  background: #dce5ef;
+  background: #c9d5e4;
 }
 
 .daily-report-table tbody tr:nth-child(even) td {
-  background: #f2f4f8;
+  background: #ffffff;
 }
 
 .daily-report-table td:nth-child(1) {
@@ -280,23 +280,23 @@ body {
 }
 
 .daily-report-table td.is-done {
-  background: #00b050 !important;
+  background: inherit !important;
   color: #000;
 }
 
 .daily-report-table td.is-progress {
-  background: #00b0f0 !important;
+  background: inherit !important;
   color: #000;
 }
 
 .daily-report-table td.is-blocked {
-  background: #ff4d4d !important;
-  color: #fff;
+  background: inherit !important;
+  color: #000;
 }
 
 .daily-report-table td.is-not-started {
-  background: #ffd966 !important;
-  color: #7c5a00;
+  background: inherit !important;
+  color: #000;
 }
 
 .daily-report-empty {

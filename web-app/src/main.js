@@ -910,20 +910,20 @@ function printDailyMonthlyReport() {
         <style>
           body { margin: 0; padding: 24px; background: #fff; font-family: Arial, Helvetica, sans-serif; }
           .daily-report-card { border: 1px solid #1c2d4f; }
-          .daily-report-card__title { background: #1f8f95; color: #fff; font-weight: 700; padding: 6px 10px; font-size: 18px; }
+          .daily-report-card__title { background: #2d8ec3; color: #fff; font-weight: 700; padding: 6px 10px; font-size: 18px; }
           .daily-report-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
           .daily-report-table th, .daily-report-table td { border: 1px solid #1c2d4f; padding: 6px 8px; font-size: 14px; }
           .daily-report-table th { background: #1f3e67; color: #fff; text-align: center; }
-          .daily-report-table td { background: #dce5ef; }
-          .daily-report-table tbody tr:nth-child(even) td { background: #f2f4f8; }
+          .daily-report-table td { background: #c9d5e4; }
+          .daily-report-table tbody tr:nth-child(even) td { background: #ffffff; }
           .daily-report-table td:nth-child(1) { width: 40%; }
           .daily-report-table td:nth-child(2) { width: 10%; text-align: center; font-weight: 700; }
           .daily-report-table td:nth-child(3) { width: 14%; font-weight: 700; }
           .daily-report-table td:nth-child(4), .daily-report-table td:nth-child(5) { width: 18%; text-align: center; }
-          .daily-report-table td.is-done { background: #00b050 !important; color: #000; }
-          .daily-report-table td.is-progress { background: #00b0f0 !important; color: #000; }
-          .daily-report-table td.is-blocked { background: #ff4d4d !important; color: #fff; }
-          .daily-report-table td.is-not-started { background: #ffd966 !important; color: #7c5a00; }
+          .daily-report-table td.is-done { background: inherit !important; color: #000; }
+          .daily-report-table td.is-progress { background: inherit !important; color: #000; }
+          .daily-report-table td.is-blocked { background: inherit !important; color: #000; }
+          .daily-report-table td.is-not-started { background: inherit !important; color: #000; }
           .daily-report-empty { text-align: center; font-style: italic; }
         </style>
       </head>
