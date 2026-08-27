@@ -298,7 +298,24 @@ function getRecentMonthKeys(lastCount) {
   return new Set(keys);
 }
 
+function getSelectedDailyStatuses() {
+  return new Set(dailyStatusCheckboxes().filter((cb) => cb.checked).map((cb) => cb.value));
+}
+
+function rowStatusFilterKey(statusValue) {
+  const raw = String(statusValue || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '');
+  if (raw.includes('finaliz')) return 'finalizado';
+  if (raw.includes('andamento') || raw.includes('progresso')) return 'andamento';
+  if (raw.includes('bloque') || raw.includes('imped')) return 'bloqueado';
+  if (raw.includes('iniciado')) return 'naoiniciado';
+  return raw || 'naoiniciado';
+}
+
 function shouldDisplayDailyRow(row) {
+  const selectedStatuses = getSelectedDailyStatuses();
+  const statusKey = rowStatusFilterKey(row?.status);
+  if (!selectedStatuses.has(statusKey)) return false;
+
   if (activeDailyFilterMode === 'all') return true;
 
   const rowMonth = parseMonthKeyFromDateValue(row?.entrada || row?.prazo || '');
@@ -659,6 +676,13 @@ app.innerHTML = `
               <option value="all">Sem filtro</option>
             </select>
             <input type="month" id="dailyGridFilterMonth" />
+            <fieldset class="daily-status-filter">
+              <legend>Status</legend>
+              <label><input type="checkbox" value="finalizado" checked> Finalizado</label>
+              <label><input type="checkbox" value="andamento" checked> Em andamento</label>
+              <label><input type="checkbox" value="bloqueado" checked> Bloqueado</label>
+              <label><input type="checkbox" value="naoiniciado" checked> Não iniciado</label>
+            </fieldset>
           </div>
           <div id="dailyColumnActions" class="daily-column-actions"></div>
           <div class="daily-grid-wrap">
@@ -699,7 +723,21 @@ const dailyGridHead = document.querySelector('#dailyGridHead');
 const dailyGridBody = document.querySelector('#dailyGridBody');
 const dailyGridFilterMode = document.querySelector('#dailyGridFilterMode');
 const dailyGridFilterMonth = document.querySelector('#dailyGridFilterMonth');
+const dailyStatusFilter = document.querySelector('.daily-status-filter');
+const dailyStatusCheckboxes = () => Array.from(dailyStatusFilter.querySelectorAll('input[type="checkbox"]'));
 const dailyReportMonthInput = document.querySelector('#dailyReportMonth');
+
+const dailyAutocompleteContainer = document.createElement('div');
+dailyAutocompleteContainer.id = 'dailyAutocomplete';
+dailyAutocompleteContainer.className = 'daily-autocomplete';
+dailyAutocompleteContainer.style.position = 'absolute';
+dailyAutocompleteContainer.style.display = 'none';
+dailyAutocompleteContainer.style.zIndex = '1000';
+document.body.appendChild(dailyAutocompleteContainer);
+
+let dailyAutocompleteActiveTd = null;
+let dailyAutocompleteSuggestions = [];
+let dailyAutocompleteIndex = -1;
 const dailyMonthlyReport = document.querySelector('#dailyMonthlyReport');
 const dailySystemButtons = Array.from(document.querySelectorAll('.daily-system-tab'));
 const moduleButtons = Array.from(document.querySelectorAll('.side-menu__item'));
@@ -879,6 +917,7 @@ async function importDailyFromWorkbook(file) {
   }
 
   loadDailyRows();
+  ensureEmptyTrailingRow(dailyRows.length - 1, false);
   renderDailyGrid();
   alert(`Importação concluída para: ${importedSystems.join(', ')}`);
 }
@@ -951,6 +990,7 @@ function setActiveDailySystem(systemKey) {
     button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
   });
   loadDailyRows();
+  ensureEmptyTrailingRow(dailyRows.length - 1, false);
   renderDailyGrid();
 }
 
@@ -1332,6 +1372,108 @@ function updateDailyCell(rowIndex, columnKey, value) {
   saveDailyRows();
 }
 
+function getDailyColumnSuggestions(columnKey, text) {
+  const raw = String(text || '').toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  if (!raw) return [];
+  const seen = new Set();
+  const matches = [];
+  dailyRows.forEach((row) => {
+    const value = String(row[columnKey] || '').trim();
+    if (!value) return;
+    const normalized = value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    if (normalized.startsWith(raw) && !seen.has(value)) {
+      seen.add(value);
+      matches.push(value);
+    }
+  });
+  const predefined = {
+    status: ['Finalizado', 'Em andamento', 'Bloqueado', 'Não Iniciado'],
+    prioridade: ['Alto', 'Médio', 'Baixo'],
+  };
+  (predefined[columnKey] || []).forEach((value) => {
+    const normalized = value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    if (normalized.startsWith(raw) && !seen.has(value)) {
+      seen.add(value);
+      matches.push(value);
+    }
+  });
+  return matches.slice(0, 10);
+}
+
+function positionDailyAutocomplete(td) {
+  const rect = td.getBoundingClientRect();
+  dailyAutocompleteContainer.style.left = `${rect.left + window.scrollX}px`;
+  dailyAutocompleteContainer.style.top = `${rect.bottom + window.scrollY}px`;
+  dailyAutocompleteContainer.style.minWidth = `${rect.width}px`;
+}
+
+function showDailyAutocomplete(td, suggestions) {
+  dailyAutocompleteActiveTd = td;
+  dailyAutocompleteSuggestions = suggestions;
+  dailyAutocompleteIndex = -1;
+  dailyAutocompleteContainer.innerHTML = '';
+  if (suggestions.length === 0) {
+    dailyAutocompleteContainer.style.display = 'none';
+    return;
+  }
+  suggestions.forEach((value, index) => {
+    const item = document.createElement('div');
+    item.className = 'daily-autocomplete__item';
+    item.textContent = value;
+    item.dataset.index = String(index);
+    item.addEventListener('mousedown', (event) => {
+      event.preventDefault();
+      applyDailyAutocomplete(index);
+    });
+    dailyAutocompleteContainer.appendChild(item);
+  });
+  positionDailyAutocomplete(td);
+  dailyAutocompleteContainer.style.display = 'block';
+}
+
+function hideDailyAutocomplete() {
+  dailyAutocompleteContainer.style.display = 'none';
+  dailyAutocompleteActiveTd = null;
+  dailyAutocompleteSuggestions = [];
+  dailyAutocompleteIndex = -1;
+}
+
+function applyDailyAutocomplete(index) {
+  if (!dailyAutocompleteActiveTd || index < 0 || index >= dailyAutocompleteSuggestions.length) return;
+  const value = dailyAutocompleteSuggestions[index];
+  const rowIndex = Number(dailyAutocompleteActiveTd.dataset.row);
+  const columnKey = dailyAutocompleteActiveTd.dataset.column;
+  dailyAutocompleteActiveTd.textContent = value;
+  updateDailyCell(rowIndex, columnKey, value);
+  hideDailyAutocomplete();
+}
+
+function highlightDailyAutocompleteItem() {
+  Array.from(dailyAutocompleteContainer.children).forEach((child, index) => {
+    child.classList.toggle('daily-autocomplete__item--active', index === dailyAutocompleteIndex);
+  });
+}
+
+function handleDailyAutocompleteKey(event, td) {
+  if (dailyAutocompleteContainer.style.display === 'none' || !dailyAutocompleteActiveTd) return;
+  if (event.key === 'ArrowDown') {
+    event.preventDefault();
+    dailyAutocompleteIndex = (dailyAutocompleteIndex + 1) % dailyAutocompleteSuggestions.length;
+    highlightDailyAutocompleteItem();
+  } else if (event.key === 'ArrowUp') {
+    event.preventDefault();
+    dailyAutocompleteIndex = (dailyAutocompleteIndex - 1 + dailyAutocompleteSuggestions.length) % dailyAutocompleteSuggestions.length;
+    highlightDailyAutocompleteItem();
+  } else if (event.key === 'Enter' || event.key === 'Tab') {
+    event.preventDefault();
+    if (dailyAutocompleteIndex >= 0) {
+      applyDailyAutocomplete(dailyAutocompleteIndex);
+    }
+  } else if (event.key === 'Escape') {
+    hideDailyAutocomplete();
+  }
+}
+
 function renderDailyGrid() {
   dailyGridHead.innerHTML = '';
   dailyGridBody.innerHTML = '';
@@ -1347,9 +1489,10 @@ function renderDailyGrid() {
   });
   dailyGridHead.appendChild(headRow);
 
+  const lastRowIndex = dailyRows.length - 1;
   const rowsToRender = dailyRows
     .map((row, rowIndex) => ({ row, rowIndex }))
-    .filter(({ row }) => shouldDisplayDailyRow(row));
+    .filter(({ row, rowIndex }) => rowIndex === lastRowIndex || shouldDisplayDailyRow(row));
 
   rowsToRender.forEach(({ row, rowIndex }) => {
     const tr = document.createElement('tr');
@@ -1379,13 +1522,24 @@ function renderDailyGrid() {
       td.addEventListener('input', () => {
         const text = td.textContent || '';
         updateDailyCell(rowIndex, column.key, text);
+        const suggestions = getDailyColumnSuggestions(column.key, text);
+        showDailyAutocomplete(td, suggestions);
         if (column.key === 'status') {
           td.classList.remove('daily-status--done', 'daily-status--progress', 'daily-status--blocked', 'daily-status--not-started');
           const nextClass = getStatusClass(text);
           if (nextClass) td.classList.add(nextClass);
         }
       });
+      td.addEventListener('keydown', (event) => {
+        handleDailyAutocompleteKey(event, td);
+      });
+      td.addEventListener('focus', () => {
+        const text = td.textContent || '';
+        const suggestions = getDailyColumnSuggestions(column.key, text);
+        showDailyAutocomplete(td, suggestions);
+      });
       td.addEventListener('blur', () => {
+        hideDailyAutocomplete();
         saveDailyRows();
         ensureEmptyTrailingRow(rowIndex);
       });
@@ -1397,7 +1551,7 @@ function renderDailyGrid() {
   });
 }
 
-function ensureEmptyTrailingRow(rowIndex) {
+function ensureEmptyTrailingRow(rowIndex, shouldRender = true) {
   if (rowIndex !== dailyRows.length - 1) return;
   if (isDailyRowCompletelyEmpty(dailyRows[rowIndex])) return;
   const newRow = createEmptyDailyRow();
@@ -1408,7 +1562,7 @@ function ensureEmptyTrailingRow(rowIndex) {
   }
   dailyRows.push(newRow);
   saveDailyRows();
-  renderDailyGrid();
+  if (shouldRender) renderDailyGrid();
 }
 
 function addDailyRow() {
@@ -2192,6 +2346,9 @@ dailyGridFilterMonth.addEventListener('change', () => {
   if (activeDailyFilterMode === 'month') {
     renderDailyGrid();
   }
+});
+dailyStatusFilter.addEventListener('change', () => {
+  renderDailyGrid();
 });
 btnDailyGenerateReport.addEventListener('click', renderDailyMonthlyReport);
 btnDailyPrintReport.addEventListener('click', printDailyMonthlyReport);
