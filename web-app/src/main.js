@@ -1350,17 +1350,6 @@ function getStatusClass(statusValue) {
 
 function renderDailyColumnActions() {
   dailyColumnActions.innerHTML = '';
-  const currentSystem = dailySystems.find((item) => item.key === activeDailySystem);
-  dailyColumns.forEach((column) => {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'pill-btn';
-    button.textContent = `Salvar ${column.label} (${currentSystem?.label || activeDailySystem})`;
-    button.addEventListener('click', () => {
-      saveDailyColumn(column.key);
-    });
-    dailyColumnActions.appendChild(button);
-  });
 }
 
 function updateDailyCell(rowIndex, columnKey, value) {
