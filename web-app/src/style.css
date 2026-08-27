@@ -223,7 +223,7 @@ body {
 }
 
 .daily-report-card__title {
-  background: #2d8ec3;
+  background: var(--daily-report-title-bg, #2d8ec3);
   color: #fff;
   font-size: 1rem;
   font-weight: 700;

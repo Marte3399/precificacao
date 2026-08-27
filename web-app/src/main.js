@@ -816,6 +816,14 @@ function getStatusReportClass(statusValue) {
   return '';
 }
 
+function getDailyReportTheme(systemKey) {
+  const themes = {
+    scode: { titleBg: '#2d8ec3' },
+    siai: { titleBg: '#6f569d' }
+  };
+  return themes[systemKey] || { titleBg: '#2d8ec3' };
+}
+
 function isDailyIgnoredRow(row) {
   return dailyColumns.some((column) => String(row?.[column.key] || '').toUpperCase().includes('#VALOR!'));
 }
@@ -847,6 +855,7 @@ function renderDailyMonthlyReport() {
 
   const currentSystem = dailySystems.find((item) => item.key === activeDailySystem);
   const systemLabel = currentSystem?.label || activeDailySystem.toUpperCase();
+  const reportTheme = getDailyReportTheme(activeDailySystem);
   const monthLabel = formatMonthLabel(selectedMonth);
   const reportRows = getMonthlyReportRows(selectedMonth);
 
@@ -871,7 +880,7 @@ function renderDailyMonthlyReport() {
     `;
 
   dailyMonthlyReport.innerHTML = `
-    <section class="daily-report-card">
+    <section class="daily-report-card" style="--daily-report-title-bg: ${reportTheme.titleBg};">
       <div class="daily-report-card__title">● ${escapeHtml(systemLabel)}</div>
       <table class="daily-report-table">
         <thead>
