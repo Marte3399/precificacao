@@ -775,30 +775,63 @@ function findSheetNameForSystem(workbook, systemKey) {
 }
 
 function mapSheetRowToDailyRow(sheetRow) {
-  const value = (keys) => {
-    for (const key of keys) {
-      if (sheetRow[key] != null && String(sheetRow[key]).trim() !== '') {
-        return String(sheetRow[key]).trim();
+  const normalizeHeader = (text) => String(text || '')
+    .toLowerCase()
+    .trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]/g, '');
+
+  const headers = Object.keys(sheetRow).reduce((acc, key) => {
+    acc[normalizeHeader(key)] = key;
+    return acc;
+  }, {});
+
+  const valueByHeader = (candidates) => {
+    for (const candidate of candidates) {
+      const normalized = normalizeHeader(candidate);
+      const originalKey = headers[normalized];
+      if (originalKey != null && sheetRow[originalKey] != null && String(sheetRow[originalKey]).trim() !== '') {
+        return sheetRow[originalKey];
       }
     }
     return '';
   };
 
+  const rawInicio = valueByHeader(['Data de Início', 'Data de Inicio', 'Data de início', 'Data de inicio', 'Datadeinicio', 'Inicio', 'Data Inicio', 'Data Início']);
+  const rawTermino = valueByHeader(['Data do Término', 'Data do Termino', 'Data do término', 'Data do termino', 'Datadotermino', 'Termino', 'Término', 'Data Termino', 'Data Término']);
+
   return {
-    prioridade: value(['Prioridade', 'Priori\ndade', 'Priori dade']),
-    ticket: value(['Nome da tarefa', 'Ticket', 'Ticket / Tarefa']),
-    descricao: value(['Observação', 'Observacao']),
-    status: value(['Status']),
-    responsavel: value(['Atribuído a', 'Atribuido a', 'Responsável', 'Responsavel']),
-    entrada: normalizeDateCellValue(value(['Data de início', 'Data de inicio', 'Data de Início', 'Data de Inicio'])),
-    prazo: normalizeDateCellValue(value(['Data do término', 'Data do termino', 'Data do Término', 'Data do Termino', 'Data do\nTérmino'])),
-    entrega: value(['Duração']),
-    observacoes: value(['Obs.', 'Obs', 'Observações', 'Observacoes'])
+    prioridade: valueByHeader(['Prioridade']),
+    ticket: valueByHeader(['Nome da tarefa', 'Ticket', 'Tarefa']),
+    descricao: valueByHeader(['Observação', 'Observacao', 'Observao']),
+    status: valueByHeader(['Status']),
+    responsavel: valueByHeader(['Atribuído a', 'Atribuido a', 'Atribuidoa', 'Responsável', 'Responsavel']),
+    entrada: normalizeDateCellValue(rawInicio),
+    prazo: normalizeDateCellValue(rawTermino),
+    entrega: valueByHeader(['Duração', 'Duracao']),
+    observacoes: valueByHeader(['Obs.', 'Obs'])
   };
 }
 
 function isDailyRowCompletelyEmpty(row) {
   return dailyColumns.every((column) => String(row?.[column.key] || '').trim() === '');
+}
+
+function locateHeaderRow(rawRows, start = 0, end = 10) {
+  const normalize = (text) => String(text || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '');
+  const importantHeaders = new Set(['prioridade', 'nomedatarefa', 'observacao', 'status', 'atribuidoa', 'atribuido', 'responsavel', 'datadeinicio', 'datadotermino', 'duracao', 'obs']);
+
+  for (let index = start; index < Math.min(end, rawRows.length); index += 1) {
+    const row = rawRows[index] || [];
+    const normalized = row.map((cell) => normalize(cell));
+    const matches = normalized.filter((cell) => importantHeaders.has(cell)).length;
+    if (matches >= 3) {
+      return { rowIndex: index, headers: row };
+    }
+  }
+
+  return { rowIndex: 0, headers: rawRows[0] || [] };
 }
 
 async function importDailyFromWorkbook(file) {
@@ -812,7 +845,20 @@ async function importDailyFromWorkbook(file) {
     if (!sheetName) continue;
 
     const sheet = workbook.Sheets[sheetName];
-    const jsonRows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+    const rawRows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+    const { rowIndex: headerIndex, headers } = locateHeaderRow(rawRows);
+
+    const jsonRows = [];
+    for (let index = headerIndex + 1; index < rawRows.length; index += 1) {
+      const row = rawRows[index];
+      const mapped = {};
+      for (let columnIndex = 0; columnIndex < headers.length; columnIndex += 1) {
+        const header = headers[columnIndex] ?? '';
+        mapped[header] = row?.[columnIndex] ?? '';
+      }
+      jsonRows.push(mapped);
+    }
+
     const mappedRows = jsonRows
       .map((sheetRow) => mapSheetRowToDailyRow(sheetRow))
       .filter((row) => !isDailyRowCompletelyEmpty(row))
@@ -932,23 +978,35 @@ function normalizeDailyRows(rows) {
   return rows.map((row) => {
     const normalized = createEmptyDailyRow();
     dailyColumns.forEach((column) => {
-      const rawValue = row?.[column.key] == null ? '' : String(row[column.key]);
-      if (column.key === 'entrada' || column.key === 'prazo') {
-        normalized[column.key] = normalizeDateCellValue(rawValue);
-        return;
+      let cellValue = row[column.key] || '';
+      if (column.key === 'prioridade') cellValue = normalizePrioridade(cellValue);
+      if (column.key === 'entrada' || column.key === 'prazo') cellValue = normalizeDateCellValue(cellValue);
+      if (column.key === 'entrega') {
+        const numeric = Number(cellValue);
+        if (!Number.isNaN(numeric) && numeric >= 10000) {
+          cellValue = normalizeDateCellValue(cellValue);
+        }
       }
-      normalized[column.key] = rawValue;
+      normalized[column.key] = cellValue;
     });
     return normalized;
   });
 }
 
 function convertExcelSerialToDateString(value) {
-  const parsed = XLSX.SSF.parse_date_code(value);
+  const parsed = XLSX.SSF.parse_date_code(Number(value));
   if (!parsed || !parsed.y || !parsed.m || !parsed.d) return '';
   const day = String(parsed.d).padStart(2, '0');
   const month = String(parsed.m).padStart(2, '0');
   return `${day}/${month}/${parsed.y}`;
+}
+
+function normalizePrioridade(value) {
+  const raw = String(value || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  if (raw.includes('alt')) return 'Alto';
+  if (raw.includes('medi') || raw.includes('medio')) return 'Médio';
+  if (raw.includes('bai')) return 'Baixo';
+  return String(value || '').trim();
 }
 
 function normalizeDateCellValue(value) {
@@ -1341,7 +1399,10 @@ function renderDailyGrid() {
       const td = document.createElement('td');
       td.contentEditable = 'true';
       td.spellcheck = false;
-      td.textContent = row[column.key] || '';
+      let cellValue = row[column.key] || '';
+      if (column.key === 'prioridade') cellValue = normalizePrioridade(cellValue);
+      if (column.key === 'entrada' || column.key === 'prazo') cellValue = normalizeDateCellValue(cellValue);
+      td.textContent = cellValue;
       td.dataset.row = String(rowIndex);
       td.dataset.column = column.key;
 
