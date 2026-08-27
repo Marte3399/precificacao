@@ -665,6 +665,7 @@ const DAILY_COLUMN_STORAGE_PREFIX = 'precificacao.daily.column.';
 const DAILY_ROWS_STORAGE_PREFIX = 'precificacao.daily.grid.rows.v2.';
 const DAILY_MIN_ROWS = 20;
 const DAILY_LEGACY_STORAGE_KEY = 'precificacao.daily.grid.rows.v1';
+const DAILY_API_BASE_URL = '/api/daily-grid';
 const dailySystems = [
   { key: 'scode', label: 'SCode' },
   { key: 'siai', label: 'SIAI' },
@@ -753,8 +754,66 @@ function ensureDailyMinimumRows() {
   }
 }
 
+function normalizeDailyRows(rows) {
+  if (!Array.isArray(rows)) return [];
+  return rows.map((row) => {
+    const normalized = createEmptyDailyRow();
+    dailyColumns.forEach((column) => {
+      normalized[column.key] = row?.[column.key] == null ? '' : String(row[column.key]);
+    });
+    return normalized;
+  });
+}
+
+async function fetchDailyRowsFromApi(systemKey = activeDailySystem) {
+  const response = await fetch(`${DAILY_API_BASE_URL}/${encodeURIComponent(systemKey)}`);
+  if (!response.ok) {
+    throw new Error(`Falha ao carregar daily (${response.status})`);
+  }
+  const payload = await response.json();
+  return normalizeDailyRows(payload?.rows || []);
+}
+
+async function saveDailyRowsToApi(systemKey = activeDailySystem, rowsPayload = dailyRows) {
+  try {
+    await fetch(`${DAILY_API_BASE_URL}/${encodeURIComponent(systemKey)}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ rows: rowsPayload })
+    });
+  } catch (error) {
+    console.warn('API Daily indisponível. Mantendo dados no localStorage.', error);
+  }
+}
+
+async function syncDailyRowsFromApi(systemKey = activeDailySystem) {
+  try {
+    const remoteRows = await fetchDailyRowsFromApi(systemKey);
+    if (!remoteRows.length) {
+      const hasLocalData = dailyRows.some((row) => dailyColumns.some((column) => String(row?.[column.key] || '').trim() !== ''));
+      if (hasLocalData) {
+        const snapshot = dailyRows.map((row) => ({ ...row }));
+        await saveDailyRowsToApi(systemKey, snapshot);
+      }
+      return;
+    }
+    if (systemKey !== activeDailySystem) return;
+
+    dailyRows = remoteRows;
+    ensureDailyMinimumRows();
+    localStorage.setItem(getDailyRowsStorageKey(systemKey), JSON.stringify(dailyRows));
+    renderDailyGrid();
+  } catch (error) {
+    console.warn('Não foi possível sincronizar Daily com API. Usando dados locais.', error);
+  }
+}
+
 function saveDailyRows() {
+  const snapshot = dailyRows.map((row) => ({ ...row }));
   localStorage.setItem(getDailyRowsStorageKey(), JSON.stringify(dailyRows));
+  void saveDailyRowsToApi(activeDailySystem, snapshot);
 }
 
 function saveDailyColumn(columnKey) {
@@ -960,13 +1019,7 @@ function loadDailyRows() {
     if (storedRowsRaw) {
       const parsed = JSON.parse(storedRowsRaw);
       if (Array.isArray(parsed)) {
-        dailyRows = parsed.map((row) => {
-          const normalized = createEmptyDailyRow();
-          dailyColumns.forEach((column) => {
-            normalized[column.key] = row?.[column.key] == null ? '' : String(row[column.key]);
-          });
-          return normalized;
-        });
+        dailyRows = normalizeDailyRows(parsed);
       }
     }
 
@@ -975,13 +1028,7 @@ function loadDailyRows() {
       if (legacyRaw) {
         const parsedLegacy = JSON.parse(legacyRaw);
         if (Array.isArray(parsedLegacy)) {
-          dailyRows = parsedLegacy.map((row) => {
-            const normalized = createEmptyDailyRow();
-            dailyColumns.forEach((column) => {
-              normalized[column.key] = row?.[column.key] == null ? '' : String(row[column.key]);
-            });
-            return normalized;
-          });
+          dailyRows = normalizeDailyRows(parsedLegacy);
         }
       }
     }
@@ -1008,6 +1055,7 @@ function loadDailyRows() {
   }
 
   ensureDailyMinimumRows();
+  void syncDailyRowsFromApi(activeDailySystem);
 }
 
 function getStatusClass(statusValue) {
