@@ -797,8 +797,8 @@ function mapSheetRowToDailyRow(sheetRow) {
     return '';
   };
 
-  const rawInicio = valueByHeader(['Data de Início', 'Data de Inicio', 'Data de início', 'Data de inicio', 'Datadeinicio', 'Inicio', 'Data Inicio', 'Data Início']);
   const rawTermino = valueByHeader(['Data do Término', 'Data do Termino', 'Data do término', 'Data do termino', 'Datadotermino', 'Termino', 'Término', 'Data Termino', 'Data Término']);
+  const rawInicio = valueByHeader(['Data de Início', 'Data de Inicio', 'Data de início', 'Data de inicio', 'Datadeinicio', 'Inicio', 'Data Inicio', 'Data Início']) || rawTermino;
 
   return {
     prioridade: valueByHeader(['Prioridade']),
