@@ -1,6 +1,7 @@
 import './style.css';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
+import * as XLSX from 'xlsx';
 
 const profiles = [
   { key: 'arquiteto', label: '5.2.1.3. Arquiteto de Sistema - Nível 2', shortLabel: 'Arquiteto', rate: 292.36 },
@@ -613,6 +614,9 @@ app.innerHTML = `
             <button type="button" class="secondary" id="btnDailyAddRow">Adicionar linha</button>
             <button type="button" class="secondary" id="btnDailySaveAll">Salvar planilha</button>
             <button type="button" class="secondary" id="btnDailyReset">Limpar planilha</button>
+            <button type="button" class="secondary" id="btnDailyImportXlsx">Importar XLSX</button>
+            <button type="button" class="secondary" id="btnDailyExportXlsx">Exportar XLSX</button>
+            <input type="file" id="dailyXlsxInput" accept=".xlsx,.xls" hidden />
           </div>
           <div class="daily-report-controls">
             <label for="dailyReportMonth">Mês do relatório</label>
@@ -649,6 +653,9 @@ const btnAdicionarAtividade = document.querySelector('#btnAdicionarAtividade');
 const btnDailyAddRow = document.querySelector('#btnDailyAddRow');
 const btnDailySaveAll = document.querySelector('#btnDailySaveAll');
 const btnDailyReset = document.querySelector('#btnDailyReset');
+const btnDailyImportXlsx = document.querySelector('#btnDailyImportXlsx');
+const btnDailyExportXlsx = document.querySelector('#btnDailyExportXlsx');
+const dailyXlsxInput = document.querySelector('#dailyXlsxInput');
 const btnDailyGenerateReport = document.querySelector('#btnDailyGenerateReport');
 const btnDailyPrintReport = document.querySelector('#btnDailyPrintReport');
 const dailyColumnActions = document.querySelector('#dailyColumnActions');
@@ -704,6 +711,133 @@ const monthAbbreviationsPtBr = {
   nov: 11,
   dez: 12
 };
+
+const dailySheetBySystem = {
+  scode: ['Scodes', 'SCode', 'S CODES'],
+  siai: ['SIAI', 'SIA'],
+  ctx: ['CTX'],
+  sani: ['Sani', 'SANI'],
+  sistrs: ['SISTRS', 'Sistrs'],
+  opm: ['OPM'],
+  outros: ['OUTROS', 'Outros']
+};
+
+function findSheetNameForSystem(workbook, systemKey) {
+  const candidates = dailySheetBySystem[systemKey] || [systemKey];
+  const normalizedMap = new Map(
+    workbook.SheetNames.map((name) => [name.trim().toLowerCase(), name])
+  );
+
+  for (const candidate of candidates) {
+    const found = normalizedMap.get(candidate.trim().toLowerCase());
+    if (found) return found;
+  }
+
+  return null;
+}
+
+function mapSheetRowToDailyRow(sheetRow) {
+  const value = (keys) => {
+    for (const key of keys) {
+      if (sheetRow[key] != null && String(sheetRow[key]).trim() !== '') {
+        return String(sheetRow[key]).trim();
+      }
+    }
+    return '';
+  };
+
+  return {
+    prioridade: value(['Prioridade', 'Priori\ndade', 'Priori dade']),
+    ticket: value(['Nome da tarefa', 'Ticket', 'Ticket / Tarefa']),
+    descricao: value(['Observação', 'Observacao']),
+    status: value(['Status']),
+    responsavel: value(['Atribuído a', 'Atribuido a', 'Responsável', 'Responsavel']),
+    entrada: value(['Data de início', 'Data de inicio', 'Data de Início', 'Data de Inicio']),
+    prazo: value(['Data do término', 'Data do termino', 'Data do Término', 'Data do Termino', 'Data do\nTérmino']),
+    entrega: value(['Duração']),
+    observacoes: value(['Obs.', 'Obs', 'Observações', 'Observacoes'])
+  };
+}
+
+function isDailyRowCompletelyEmpty(row) {
+  return dailyColumns.every((column) => String(row?.[column.key] || '').trim() === '');
+}
+
+async function importDailyFromWorkbook(file) {
+  const arrayBuffer = await file.arrayBuffer();
+  const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+
+  const importedSystems = [];
+
+  for (const system of dailySystems) {
+    const sheetName = findSheetNameForSystem(workbook, system.key);
+    if (!sheetName) continue;
+
+    const sheet = workbook.Sheets[sheetName];
+    const jsonRows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+    const mappedRows = jsonRows
+      .map((sheetRow) => mapSheetRowToDailyRow(sheetRow))
+      .filter((row) => !isDailyRowCompletelyEmpty(row))
+      .filter((row) => !isDailyIgnoredRow(row));
+
+    const normalized = normalizeDailyRows(mappedRows);
+    while (normalized.length < DAILY_MIN_ROWS) {
+      normalized.push(createEmptyDailyRow());
+    }
+
+    localStorage.setItem(getDailyRowsStorageKey(system.key), JSON.stringify(normalized));
+    await saveDailyRowsToApi(system.key, normalized);
+    importedSystems.push(system.label);
+  }
+
+  if (importedSystems.length === 0) {
+    alert('Nenhuma aba reconhecida foi encontrada na planilha.');
+    return;
+  }
+
+  loadDailyRows();
+  renderDailyGrid();
+  alert(`Importação concluída para: ${importedSystems.join(', ')}`);
+}
+
+async function exportDailyToWorkbook() {
+  const workbook = XLSX.utils.book_new();
+
+  for (const system of dailySystems) {
+    let systemRows = [];
+    try {
+      systemRows = await fetchDailyRowsFromApi(system.key);
+    } catch (_error) {
+      const stored = localStorage.getItem(getDailyRowsStorageKey(system.key));
+      if (stored) {
+        try {
+          systemRows = normalizeDailyRows(JSON.parse(stored));
+        } catch (_parseError) {
+          systemRows = [];
+        }
+      }
+    }
+
+    const outputRows = systemRows
+      .filter((row) => !isDailyRowCompletelyEmpty(row))
+      .map((row) => ({
+        Prioridade: row.prioridade || '',
+        'Nome da tarefa': row.ticket || '',
+        Observação: row.descricao || '',
+        Status: row.status || '',
+        'Atribuído a': row.responsavel || '',
+        'Data de início': row.entrada || '',
+        'Data do término': row.prazo || '',
+        Duração: row.entrega || '',
+        'Obs.': row.observacoes || ''
+      }));
+
+    const worksheet = XLSX.utils.json_to_sheet(outputRows);
+    XLSX.utils.book_append_sheet(workbook, worksheet, system.label);
+  }
+
+  XLSX.writeFile(workbook, `Daily Atualizada ${new Date().toISOString().slice(0, 10)}.xlsx`);
+}
 
 let dailyRows = [];
 
@@ -1904,6 +2038,30 @@ btnDailySaveAll.addEventListener('click', () => {
   dailyColumns.forEach((column) => saveDailyColumn(column.key));
 });
 btnDailyReset.addEventListener('click', resetDailyGrid);
+btnDailyImportXlsx.addEventListener('click', () => {
+  dailyXlsxInput.click();
+});
+dailyXlsxInput.addEventListener('change', async () => {
+  const file = dailyXlsxInput.files?.[0];
+  if (!file) return;
+
+  try {
+    await importDailyFromWorkbook(file);
+  } catch (error) {
+    console.error('Falha ao importar XLSX da Daily:', error);
+    alert('Não foi possível importar a planilha. Verifique o formato do arquivo.');
+  } finally {
+    dailyXlsxInput.value = '';
+  }
+});
+btnDailyExportXlsx.addEventListener('click', async () => {
+  try {
+    await exportDailyToWorkbook();
+  } catch (error) {
+    console.error('Falha ao exportar XLSX da Daily:', error);
+    alert('Não foi possível exportar a planilha.');
+  }
+});
 btnDailyGenerateReport.addEventListener('click', renderDailyMonthlyReport);
 btnDailyPrintReport.addEventListener('click', printDailyMonthlyReport);
 ['solicitacaoCliente', 'funcionalidadesAfetadas', 'outrasInformacoes'].forEach((id) => {

@@ -14,7 +14,8 @@
     "express": "^4.21.2",
     "file-saver": "^2.0.5",
     "jszip": "^3.10.1",
-    "sqlite3": "^5.1.7"
+    "sqlite3": "^5.1.7",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "vite": "^5.2.0"
