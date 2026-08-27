@@ -706,7 +706,6 @@ const moduleButtons = Array.from(document.querySelectorAll('.side-menu__item'));
 const moduleViews = Array.from(document.querySelectorAll('.module-view'));
 let activeModule = 'precificacao';
 
-const DAILY_COLUMN_STORAGE_PREFIX = 'precificacao.daily.column.';
 const DAILY_ROWS_STORAGE_PREFIX = 'precificacao.daily.grid.rows.v2.';
 const DAILY_MIN_ROWS = 20;
 const DAILY_LEGACY_STORAGE_KEY = 'precificacao.daily.grid.rows.v1';
@@ -942,9 +941,6 @@ function getDailyRowsStorageKey(systemKey = activeDailySystem) {
   return `${DAILY_ROWS_STORAGE_PREFIX}${systemKey}`;
 }
 
-function getDailyColumnStorageKey(columnKey, systemKey = activeDailySystem) {
-  return `${DAILY_COLUMN_STORAGE_PREFIX}${systemKey}.${columnKey}`;
-}
 
 function setActiveDailySystem(systemKey) {
   if (!dailySystems.some((item) => item.key === systemKey)) return;
@@ -956,7 +952,6 @@ function setActiveDailySystem(systemKey) {
   });
   loadDailyRows();
   renderDailyGrid();
-  renderDailyColumnActions();
 }
 
 function createEmptyDailyRow() {
@@ -1079,11 +1074,6 @@ function saveDailyRows() {
   const snapshot = dailyRows.map((row) => ({ ...row }));
   localStorage.setItem(getDailyRowsStorageKey(), JSON.stringify(dailyRows));
   void saveDailyRowsToApi(activeDailySystem, snapshot);
-}
-
-function saveDailyColumn(columnKey) {
-  const values = dailyRows.map((row) => row[columnKey] || '');
-  localStorage.setItem(getDailyColumnStorageKey(columnKey), JSON.stringify(values));
 }
 
 function escapeHtml(text) {
@@ -1318,18 +1308,6 @@ function loadDailyRows() {
       dailyRows = new Array(DAILY_MIN_ROWS).fill(null).map(() => createEmptyDailyRow());
     }
 
-    dailyColumns.forEach((column) => {
-      const columnRaw = localStorage.getItem(getDailyColumnStorageKey(column.key));
-      if (!columnRaw) return;
-      const values = JSON.parse(columnRaw);
-      if (!Array.isArray(values)) return;
-      values.forEach((value, rowIndex) => {
-        if (!dailyRows[rowIndex]) {
-          dailyRows[rowIndex] = createEmptyDailyRow();
-        }
-        dailyRows[rowIndex][column.key] = value == null ? '' : String(value);
-      });
-    });
   } catch (error) {
     console.error('Falha ao carregar grade da daily:', error);
     dailyRows = new Array(DAILY_MIN_ROWS).fill(null).map(() => createEmptyDailyRow());
@@ -1346,10 +1324,6 @@ function getStatusClass(statusValue) {
   if (normalized.includes('bloque')) return 'daily-status--blocked';
   if (normalized.includes('iniciado')) return 'daily-status--not-started';
   return '';
-}
-
-function renderDailyColumnActions() {
-  dailyColumnActions.innerHTML = '';
 }
 
 function updateDailyCell(rowIndex, columnKey, value) {
@@ -1412,7 +1386,7 @@ function renderDailyGrid() {
         }
       });
       td.addEventListener('blur', () => {
-        saveDailyColumn(column.key);
+        saveDailyRows();
       });
 
       tr.appendChild(td);
@@ -1435,9 +1409,6 @@ function resetDailyGrid() {
 
   dailyRows = new Array(DAILY_MIN_ROWS).fill(null).map(() => createEmptyDailyRow());
   saveDailyRows();
-  dailyColumns.forEach((column) => {
-    localStorage.removeItem(getDailyColumnStorageKey(column.key));
-  });
   renderDailyGrid();
 }
 
@@ -2167,7 +2138,6 @@ dailySystemButtons.forEach((button) => {
 btnDailyAddRow.addEventListener('click', addDailyRow);
 btnDailySaveAll.addEventListener('click', () => {
   saveDailyRows();
-  dailyColumns.forEach((column) => saveDailyColumn(column.key));
 });
 btnDailyReset.addEventListener('click', resetDailyGrid);
 btnDailyImportXlsx.addEventListener('click', () => {
