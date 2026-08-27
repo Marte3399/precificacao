@@ -1767,29 +1767,33 @@ function renderActivities() {
     header.appendChild(actions);
     card.appendChild(header);
 
-    const chips = document.createElement('div');
-    chips.className = 'activity-card__chips';
-    let hasHours = false;
+    const grid = document.createElement('div');
+    grid.className = 'hours-grid';
     profiles.forEach((profile) => {
-      const hours = item.hours[profile.key] || 0;
-      if (hours > 0) {
-        hasHours = true;
-        const chip = document.createElement('span');
-        chip.className = 'pill pill--tag';
-        chip.textContent = `${profile.shortLabel}: ${hours}h`;
-        chips.appendChild(chip);
-      }
+      const field = document.createElement('div');
+      field.className = 'hour-field';
+
+      const label = document.createElement('span');
+      label.textContent = profile.shortLabel;
+      field.appendChild(label);
+
+      const input = document.createElement('input');
+      input.type = 'number';
+      input.min = '0';
+      input.step = '0.5';
+      input.value = item.hours[profile.key] || 0;
+      input.addEventListener('input', () => {
+        const value = Number(input.value) || 0;
+        item.hours[profile.key] = value;
+        state.hours[profile.key][manualIndex] = value;
+        refreshSummaries();
+      });
+
+      field.appendChild(input);
+      grid.appendChild(field);
     });
 
-    if (hasHours) {
-      card.appendChild(chips);
-    } else {
-      const empty = document.createElement('p');
-      empty.className = 'activity-card__empty';
-      empty.textContent = 'Nenhuma hora atribuída ainda. Use o formulário acima para inserir.';
-      card.appendChild(empty);
-    }
-
+    card.appendChild(grid);
     fragment.appendChild(card);
   });
 

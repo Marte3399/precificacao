@@ -772,3 +772,24 @@ button.secondary {
     grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
   }
 }
+
+.daily-autocomplete {
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+.daily-autocomplete__item {
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.daily-autocomplete__item:hover,
+.daily-autocomplete__item--active {
+  background: var(--panel);
+}
