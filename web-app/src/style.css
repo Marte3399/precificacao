@@ -248,6 +248,22 @@ body {
   max-width: 180px;
 }
 
+.daily-grid-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.daily-grid-filters label {
+  margin-bottom: 0;
+}
+
+.daily-grid-filters select,
+.daily-grid-filters input[type="month"] {
+  max-width: 220px;
+}
+
 .daily-monthly-report {
   margin-top: 8px;
 }

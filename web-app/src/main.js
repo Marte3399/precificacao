@@ -288,6 +288,33 @@ function findParagraphByText(xmlDoc, targetText) {
   return null;
 }
 
+function getRecentMonthKeys(lastCount) {
+  const now = new Date();
+  const keys = [];
+  for (let index = 0; index < lastCount; index += 1) {
+    const date = new Date(now.getFullYear(), now.getMonth() - index, 1);
+    keys.push(`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`);
+  }
+  return new Set(keys);
+}
+
+function shouldDisplayDailyRow(row) {
+  if (activeDailyFilterMode === 'all') return true;
+
+  const rowMonth = parseMonthKeyFromDateValue(row?.entrada || row?.prazo || '');
+  if (!rowMonth) return false;
+
+  if (activeDailyFilterMode === 'month') {
+    return rowMonth === dailyGridFilterMonth.value;
+  }
+
+  if (activeDailyFilterMode === 'last3') {
+    return getRecentMonthKeys(3).has(rowMonth);
+  }
+
+  return true;
+}
+
 function findParagraphContainingText(xmlDoc, targetFragment) {
   const paragraphs = xmlDoc.getElementsByTagName('w:p');
   const normalizedTarget = targetFragment.toLowerCase();
@@ -624,6 +651,15 @@ app.innerHTML = `
             <button type="button" class="secondary" id="btnDailyGenerateReport">Gerar relatório mensal</button>
             <button type="button" class="secondary" id="btnDailyPrintReport">Imprimir relatório</button>
           </div>
+          <div class="daily-grid-filters">
+            <label for="dailyGridFilterMode">Filtro da grade</label>
+            <select id="dailyGridFilterMode">
+              <option value="all">Sem filtro</option>
+              <option value="month">Mês selecionado</option>
+              <option value="last3">Últimos 3 meses</option>
+            </select>
+            <input type="month" id="dailyGridFilterMonth" />
+          </div>
           <div id="dailyColumnActions" class="daily-column-actions"></div>
           <div class="daily-grid-wrap">
             <table class="daily-grid" id="dailyGridTable">
@@ -661,6 +697,8 @@ const btnDailyPrintReport = document.querySelector('#btnDailyPrintReport');
 const dailyColumnActions = document.querySelector('#dailyColumnActions');
 const dailyGridHead = document.querySelector('#dailyGridHead');
 const dailyGridBody = document.querySelector('#dailyGridBody');
+const dailyGridFilterMode = document.querySelector('#dailyGridFilterMode');
+const dailyGridFilterMonth = document.querySelector('#dailyGridFilterMonth');
 const dailyReportMonthInput = document.querySelector('#dailyReportMonth');
 const dailyMonthlyReport = document.querySelector('#dailyMonthlyReport');
 const dailySystemButtons = Array.from(document.querySelectorAll('.daily-system-tab'));
@@ -752,8 +790,8 @@ function mapSheetRowToDailyRow(sheetRow) {
     descricao: value(['Observação', 'Observacao']),
     status: value(['Status']),
     responsavel: value(['Atribuído a', 'Atribuido a', 'Responsável', 'Responsavel']),
-    entrada: value(['Data de início', 'Data de inicio', 'Data de Início', 'Data de Inicio']),
-    prazo: value(['Data do término', 'Data do termino', 'Data do Término', 'Data do Termino', 'Data do\nTérmino']),
+    entrada: normalizeDateCellValue(value(['Data de início', 'Data de inicio', 'Data de Início', 'Data de Inicio'])),
+    prazo: normalizeDateCellValue(value(['Data do término', 'Data do termino', 'Data do Término', 'Data do Termino', 'Data do\nTérmino'])),
     entrega: value(['Duração']),
     observacoes: value(['Obs.', 'Obs', 'Observações', 'Observacoes'])
   };
@@ -840,6 +878,7 @@ async function exportDailyToWorkbook() {
 }
 
 let dailyRows = [];
+let activeDailyFilterMode = 'all';
 
 function setActiveModule(moduleName) {
   activeModule = moduleName;
@@ -893,10 +932,44 @@ function normalizeDailyRows(rows) {
   return rows.map((row) => {
     const normalized = createEmptyDailyRow();
     dailyColumns.forEach((column) => {
-      normalized[column.key] = row?.[column.key] == null ? '' : String(row[column.key]);
+      const rawValue = row?.[column.key] == null ? '' : String(row[column.key]);
+      if (column.key === 'entrada' || column.key === 'prazo') {
+        normalized[column.key] = normalizeDateCellValue(rawValue);
+        return;
+      }
+      normalized[column.key] = rawValue;
     });
     return normalized;
   });
+}
+
+function convertExcelSerialToDateString(value) {
+  const parsed = XLSX.SSF.parse_date_code(value);
+  if (!parsed || !parsed.y || !parsed.m || !parsed.d) return '';
+  const day = String(parsed.d).padStart(2, '0');
+  const month = String(parsed.m).padStart(2, '0');
+  return `${day}/${month}/${parsed.y}`;
+}
+
+function normalizeDateCellValue(value) {
+  if (value == null) return '';
+  if (typeof value === 'number') {
+    const converted = convertExcelSerialToDateString(value);
+    return converted || String(value);
+  }
+
+  const raw = String(value).trim();
+  if (!raw) return '';
+
+  if (/^\d+(?:\.\d+)?$/.test(raw)) {
+    const numeric = Number(raw);
+    if (numeric >= 20000 && numeric <= 80000) {
+      const converted = convertExcelSerialToDateString(numeric);
+      if (converted) return converted;
+    }
+  }
+
+  return raw;
 }
 
 async function fetchDailyRowsFromApi(systemKey = activeDailySystem) {
@@ -965,7 +1038,7 @@ function escapeHtml(text) {
 }
 
 function parseMonthKeyFromDateValue(value) {
-  const raw = String(value || '').trim().toLowerCase();
+  const raw = normalizeDateCellValue(value).trim().toLowerCase();
   if (!raw) return null;
 
   let match = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
@@ -1253,7 +1326,11 @@ function renderDailyGrid() {
   });
   dailyGridHead.appendChild(headRow);
 
-  dailyRows.forEach((row, rowIndex) => {
+  const rowsToRender = dailyRows
+    .map((row, rowIndex) => ({ row, rowIndex }))
+    .filter(({ row }) => shouldDisplayDailyRow(row));
+
+  rowsToRender.forEach(({ row, rowIndex }) => {
     const tr = document.createElement('tr');
     const indexCell = document.createElement('td');
     indexCell.className = 'daily-row-index';
@@ -1311,6 +1388,11 @@ function resetDailyGrid() {
   dailyColumns.forEach((column) => {
     localStorage.removeItem(getDailyColumnStorageKey(column.key));
   });
+  renderDailyGrid();
+}
+
+function setDailyGridFilterMode(mode) {
+  activeDailyFilterMode = mode;
   renderDailyGrid();
 }
 
@@ -2062,6 +2144,14 @@ btnDailyExportXlsx.addEventListener('click', async () => {
     alert('Não foi possível exportar a planilha.');
   }
 });
+dailyGridFilterMode.addEventListener('change', () => {
+  setDailyGridFilterMode(dailyGridFilterMode.value);
+});
+dailyGridFilterMonth.addEventListener('change', () => {
+  if (activeDailyFilterMode === 'month') {
+    renderDailyGrid();
+  }
+});
 btnDailyGenerateReport.addEventListener('click', renderDailyMonthlyReport);
 btnDailyPrintReport.addEventListener('click', printDailyMonthlyReport);
 ['solicitacaoCliente', 'funcionalidadesAfetadas', 'outrasInformacoes'].forEach((id) => {
@@ -2071,6 +2161,7 @@ btnDailyPrintReport.addEventListener('click', printDailyMonthlyReport);
 // Inicialização
 setActiveModule(activeModule);
 setActiveDailySystem(activeDailySystem);
+dailyGridFilterMonth.value = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
 dailyReportMonthInput.value = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
 renderPerfilButtons();
 renderHoraButtons();
