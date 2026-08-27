@@ -495,11 +495,12 @@ app.innerHTML = `
       <h1>Precificação e Geração de Estimativas</h1>
       <p>Preencha os dados do ticket, distribua as horas por perfil e gere automaticamente o documento Word pronto para envio.</p>
     </header>
-    <nav class="top-menu" aria-label="Módulos do sistema">
-      <button type="button" class="top-menu__item top-menu__item--active" data-module="precificacao">Precificação</button>
-      <button type="button" class="top-menu__item" data-module="daily">Planilha da Daily</button>
-    </nav>
-    <main class="content">
+    <div class="workspace-layout">
+      <nav class="side-menu" aria-label="Módulos do sistema">
+        <button type="button" class="side-menu__item side-menu__item--active" data-module="precificacao">Precificação</button>
+        <button type="button" class="side-menu__item" data-module="daily">Planilha da Daily</button>
+      </nav>
+      <main class="content">
       <section class="module-view module-view--active" data-module-view="precificacao">
       <section class="section">
         <h2>Dados do Ticket</h2>
@@ -629,7 +630,8 @@ app.innerHTML = `
           <div id="dailyMonthlyReport" class="daily-monthly-report"></div>
         </section>
       </section>
-    </main>
+      </main>
+    </div>
   </div>
 `;
 
@@ -655,7 +657,7 @@ const dailyGridBody = document.querySelector('#dailyGridBody');
 const dailyReportMonthInput = document.querySelector('#dailyReportMonth');
 const dailyMonthlyReport = document.querySelector('#dailyMonthlyReport');
 const dailySystemButtons = Array.from(document.querySelectorAll('.daily-system-tab'));
-const moduleButtons = Array.from(document.querySelectorAll('.top-menu__item'));
+const moduleButtons = Array.from(document.querySelectorAll('.side-menu__item'));
 const moduleViews = Array.from(document.querySelectorAll('.module-view'));
 let activeModule = 'precificacao';
 
@@ -708,7 +710,7 @@ function setActiveModule(moduleName) {
   activeModule = moduleName;
   moduleButtons.forEach((button) => {
     const isActive = button.dataset.module === moduleName;
-    button.classList.toggle('top-menu__item--active', isActive);
+    button.classList.toggle('side-menu__item--active', isActive);
     button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
   });
   moduleViews.forEach((view) => {
@@ -820,7 +822,9 @@ function getDailyReportTheme(systemKey) {
   const themes = {
     scode: { titleBg: '#2d8ec3' },
     siai: { titleBg: '#6f569d' },
-    sani: { titleBg: '#1fae61' }
+    sani: { titleBg: '#1fae61' },
+    opm: { titleBg: '#ea7f1b' },
+    sistrs: { titleBg: '#22a7dc' }
   };
   return themes[systemKey] || { titleBg: '#2d8ec3' };
 }
