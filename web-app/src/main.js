@@ -654,9 +654,9 @@ app.innerHTML = `
           <div class="daily-grid-filters">
             <label for="dailyGridFilterMode">Filtro da grade</label>
             <select id="dailyGridFilterMode">
-              <option value="all">Sem filtro</option>
-              <option value="month">Mês selecionado</option>
+              <option value="month" selected>Mês selecionado</option>
               <option value="last3">Últimos 3 meses</option>
+              <option value="all">Sem filtro</option>
             </select>
             <input type="month" id="dailyGridFilterMonth" />
           </div>
@@ -923,7 +923,7 @@ async function exportDailyToWorkbook() {
 }
 
 let dailyRows = [];
-let activeDailyFilterMode = 'all';
+let activeDailyFilterMode = 'month';
 
 function setActiveModule(moduleName) {
   activeModule = moduleName;
@@ -2180,9 +2180,9 @@ btnDailyPrintReport.addEventListener('click', printDailyMonthlyReport);
 
 // Inicialização
 setActiveModule(activeModule);
-setActiveDailySystem(activeDailySystem);
 dailyGridFilterMonth.value = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
 dailyReportMonthInput.value = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
+setActiveDailySystem(activeDailySystem);
 renderPerfilButtons();
 renderHoraButtons();
 rebuildActivitiesList();
