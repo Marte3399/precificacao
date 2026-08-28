@@ -1201,7 +1201,7 @@ function getMonthlyReportRows(monthKey) {
       observacao: String(row.descricao || '').trim(),
       status: String(row.status || '').trim(),
       atribuida: String(row.responsavel || '').trim(),
-      inicio: String(row.entrada || '').trim(),
+      inicio: String(row.entrada || row.prazo || '').trim(),
       termino: String(row.prazo || '').trim(),
       duracao: String(row.entrega || '').trim(),
       obs: String(row.observacoes || '').trim(),
@@ -1499,6 +1499,29 @@ function renderDailyGrid() {
     const indexCell = document.createElement('td');
     indexCell.className = 'daily-row-index';
     indexCell.textContent = String(rowIndex + 1);
+
+    const rowActions = document.createElement('div');
+    rowActions.className = 'daily-row-actions';
+
+    const insertButton = document.createElement('button');
+    insertButton.type = 'button';
+    insertButton.className = 'daily-row-action daily-row-action--insert';
+    insertButton.textContent = '+';
+    insertButton.title = 'Inserir linha abaixo';
+    insertButton.setAttribute('aria-label', 'Inserir linha abaixo');
+    insertButton.addEventListener('click', () => insertDailyRowAfter(rowIndex));
+    rowActions.appendChild(insertButton);
+
+    const removeButton = document.createElement('button');
+    removeButton.type = 'button';
+    removeButton.className = 'daily-row-action daily-row-action--remove';
+    removeButton.textContent = '×';
+    removeButton.title = 'Excluir linha';
+    removeButton.setAttribute('aria-label', 'Excluir linha');
+    removeButton.addEventListener('click', () => removeDailyRow(rowIndex));
+    rowActions.appendChild(removeButton);
+
+    indexCell.appendChild(rowActions);
     tr.appendChild(indexCell);
 
     dailyColumns.forEach((column) => {
@@ -1507,7 +1530,11 @@ function renderDailyGrid() {
       td.spellcheck = false;
       let cellValue = row[column.key] || '';
       if (column.key === 'prioridade') cellValue = normalizePrioridade(cellValue);
-      if (column.key === 'entrada' || column.key === 'prazo') cellValue = normalizeDateCellValue(cellValue);
+      if (column.key === 'entrada') {
+        cellValue = normalizeDateCellValue(cellValue || row.prazo);
+      } else if (column.key === 'prazo') {
+        cellValue = normalizeDateCellValue(cellValue);
+      }
       td.textContent = cellValue;
       td.dataset.row = String(rowIndex);
       td.dataset.column = column.key;
@@ -1573,6 +1600,28 @@ function addDailyRow() {
     newRow.entrada = `01/${month}/${year}`;
   }
   dailyRows.push(newRow);
+  saveDailyRows();
+  renderDailyGrid();
+}
+
+function removeDailyRow(rowIndex) {
+  const currentSystem = dailySystems.find((item) => item.key === activeDailySystem);
+  const confirmed = window.confirm(`Deseja excluir a linha ${rowIndex + 1} do sistema ${currentSystem?.label || activeDailySystem}?`);
+  if (!confirmed) return;
+  dailyRows.splice(rowIndex, 1);
+  ensureDailyMinimumRows();
+  saveDailyRows();
+  renderDailyGrid();
+}
+
+function insertDailyRowAfter(rowIndex) {
+  const newRow = createEmptyDailyRow();
+  const monthValue = dailyGridFilterMonth.value;
+  if (monthValue) {
+    const [year, month] = monthValue.split('-');
+    newRow.entrada = `01/${month}/${year}`;
+  }
+  dailyRows.splice(rowIndex + 1, 0, newRow);
   saveDailyRows();
   renderDailyGrid();
 }
