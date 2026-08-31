@@ -794,6 +794,14 @@ button.secondary {
   background: var(--panel);
 }
 
+#dailyGridSearch {
+  min-width: 220px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 14px;
+}
+
 .daily-row-index {
   position: relative;
 }

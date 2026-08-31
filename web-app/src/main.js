@@ -311,7 +311,18 @@ function rowStatusFilterKey(statusValue) {
   return raw || 'naoiniciado';
 }
 
+function rowMatchesSearch(row) {
+  const query = (dailyGridSearch?.value || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  if (!query) return true;
+  return dailyColumns.some((column) => {
+    const value = String(row?.[column.key] || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    return value.includes(query);
+  });
+}
+
 function shouldDisplayDailyRow(row) {
+  if (!rowMatchesSearch(row)) return false;
+
   const selectedStatuses = getSelectedDailyStatuses();
   const statusKey = rowStatusFilterKey(row?.status);
   if (!selectedStatuses.has(statusKey)) return false;
@@ -669,6 +680,8 @@ app.innerHTML = `
             <button type="button" class="secondary" id="btnDailyPrintReport">Imprimir relatório</button>
           </div>
           <div class="daily-grid-filters">
+            <label for="dailyGridSearch">Buscar</label>
+            <input type="search" id="dailyGridSearch" placeholder="Buscar em todas as colunas" />
             <label for="dailyGridFilterMode">Filtro da grade</label>
             <select id="dailyGridFilterMode">
               <option value="month" selected>Mês selecionado</option>
@@ -723,6 +736,7 @@ const dailyGridHead = document.querySelector('#dailyGridHead');
 const dailyGridBody = document.querySelector('#dailyGridBody');
 const dailyGridFilterMode = document.querySelector('#dailyGridFilterMode');
 const dailyGridFilterMonth = document.querySelector('#dailyGridFilterMonth');
+const dailyGridSearch = document.querySelector('#dailyGridSearch');
 const dailyStatusFilter = document.querySelector('.daily-status-filter');
 const dailyStatusCheckboxes = () => Array.from(dailyStatusFilter.querySelectorAll('input[type="checkbox"]'));
 const dailyReportMonthInput = document.querySelector('#dailyReportMonth');
@@ -2401,6 +2415,9 @@ dailyGridFilterMonth.addEventListener('change', () => {
   }
 });
 dailyStatusFilter.addEventListener('change', () => {
+  renderDailyGrid();
+});
+dailyGridSearch.addEventListener('input', () => {
   renderDailyGrid();
 });
 btnDailyGenerateReport.addEventListener('click', renderDailyMonthlyReport);
