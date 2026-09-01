@@ -618,6 +618,20 @@ app.innerHTML = `
         <div id="atividadesContainer" class="activities-list"></div>
       </section>
 
+      <div id="activityEditModal" class="modal" hidden>
+        <div class="modal__overlay"></div>
+        <div class="modal__content">
+          <h3>Editar atividade</h3>
+          <label for="activityEditDescription">Descrição</label>
+          <input type="text" id="activityEditDescription" />
+          <div id="activityEditHours" class="activity-edit-hours"></div>
+          <div class="modal__actions">
+            <button type="button" id="activityEditCancel" class="secondary">Cancelar</button>
+            <button type="button" id="activityEditSave" class="primary">Salvar</button>
+          </div>
+        </div>
+      </div>
+
       <section class="section">
         <h2>Resumo de Horas</h2>
         <div class="summary-cards" id="summaryCards"></div>
@@ -723,6 +737,11 @@ const perfilButtonsContainer = document.querySelector('#perfilButtons');
 const horaButtonsContainer = document.querySelector('#horaButtons');
 const horaManualInput = document.querySelector('#horaManualInput');
 const btnAdicionarAtividade = document.querySelector('#btnAdicionarAtividade');
+const activityEditModal = document.querySelector('#activityEditModal');
+const activityEditDescription = document.querySelector('#activityEditDescription');
+const activityEditHours = document.querySelector('#activityEditHours');
+const activityEditSave = document.querySelector('#activityEditSave');
+const activityEditCancel = document.querySelector('#activityEditCancel');
 const btnDailyAddRow = document.querySelector('#btnDailyAddRow');
 const btnDailySaveAll = document.querySelector('#btnDailySaveAll');
 const btnDailyReset = document.querySelector('#btnDailyReset');
@@ -1710,14 +1729,73 @@ function resetBuilderSelections(options = {}) {
   }
 }
 
-function enterEditingMode(index) {
+let activityEditIndex = null;
+
+function openActivityEditModal(index) {
   const target = state.manualActivities[index];
   if (!target) return;
-  builderState.editingIndex = index;
-  atividadeDescricaoInput.value = target.description;
-  btnAdicionarAtividade.textContent = EDIT_ACTIVITY_BUTTON_TEXT;
-  resetBuilderSelections({ preserveEditing: true });
-  atividadeDescricaoInput.focus();
+  activityEditIndex = index;
+  activityEditDescription.value = target.description;
+  activityEditHours.innerHTML = '';
+
+  profiles.forEach((profile) => {
+    const field = document.createElement('div');
+    field.className = 'activity-edit-hours__field';
+
+    const label = document.createElement('label');
+    label.textContent = profile.shortLabel;
+    label.setAttribute('for', `activity-edit-hour-${profile.key}`);
+    field.appendChild(label);
+
+    const input = document.createElement('input');
+    input.type = 'number';
+    input.id = `activity-edit-hour-${profile.key}`;
+    input.min = '0';
+    input.step = '0.5';
+    input.dataset.profile = profile.key;
+    input.value = target.hours[profile.key] || 0;
+    field.appendChild(input);
+
+    activityEditHours.appendChild(field);
+  });
+
+  activityEditModal.hidden = false;
+  activityEditDescription.focus();
+}
+
+function closeActivityEditModal() {
+  activityEditModal.hidden = true;
+  activityEditIndex = null;
+}
+
+function saveActivityEditModal() {
+  if (activityEditIndex === null) return;
+  const target = state.manualActivities[activityEditIndex];
+  if (!target) return;
+
+  const description = activityEditDescription.value.trim();
+  if (!description) {
+    alert('Digite a descrição da atividade.');
+    return;
+  }
+
+  target.description = description;
+  target.normalized = normalizeDescription(description);
+
+  profiles.forEach((profile) => {
+    const input = activityEditHours.querySelector(`[data-profile="${profile.key}"]`);
+    const value = Number(input?.value) || 0;
+    target.hours[profile.key] = value;
+  });
+
+  rebuildActivitiesList();
+  renderActivities();
+  refreshSummaries();
+  closeActivityEditModal();
+}
+
+function enterEditingMode(index) {
+  openActivityEditModal(index);
 }
 
 function handleAddActivity() {
@@ -2422,6 +2500,9 @@ dailyGridSearch.addEventListener('input', () => {
 });
 btnDailyGenerateReport.addEventListener('click', renderDailyMonthlyReport);
 btnDailyPrintReport.addEventListener('click', printDailyMonthlyReport);
+activityEditSave.addEventListener('click', saveActivityEditModal);
+activityEditCancel.addEventListener('click', closeActivityEditModal);
+activityEditModal.querySelector('.modal__overlay').addEventListener('click', closeActivityEditModal);
 ['solicitacaoCliente', 'funcionalidadesAfetadas', 'outrasInformacoes'].forEach((id) => {
   document.querySelector(`#${id}`).addEventListener('input', () => refreshSummaries());
 });
