@@ -1388,11 +1388,9 @@ function loadDailyRows() {
 
 function normalizeStatus(statusValue) {
   const normalized = String(statusValue || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '');
-  if (normalized.includes('finaliz')) return 'Finalizado';
-  if (normalized.includes('andamento') || normalized.includes('progresso') || normalized.includes('bloque')) return 'Em andamento';
   if (normalized.includes('nao') && normalized.includes('inici')) return 'Não iniciado';
-  if (normalized.includes('inici')) return 'Não iniciado';
-  return statusValue.trim() || 'Não iniciado';
+  if (normalized.includes('andamento') || normalized.includes('progresso') || normalized.includes('bloque')) return 'Em andamento';
+  return 'Finalizado';
 }
 
 function getStatusClass(statusValue) {
