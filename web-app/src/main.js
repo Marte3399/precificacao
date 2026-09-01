@@ -303,12 +303,10 @@ function getSelectedDailyStatuses() {
 }
 
 function rowStatusFilterKey(statusValue) {
-  const raw = String(statusValue || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '');
-  if (raw.includes('finaliz')) return 'finalizado';
-  if (raw.includes('andamento') || raw.includes('progresso')) return 'andamento';
-  if (raw.includes('bloque') || raw.includes('imped')) return 'bloqueado';
-  if (raw.includes('iniciado')) return 'naoiniciado';
-  return raw || 'naoiniciado';
+  const normalized = normalizeStatus(statusValue);
+  if (normalized === 'Finalizado') return 'finalizado';
+  if (normalized === 'Em andamento') return 'andamento';
+  return 'naoiniciado';
 }
 
 function rowMatchesSearch(row) {
@@ -707,7 +705,6 @@ app.innerHTML = `
               <legend>Status</legend>
               <label><input type="checkbox" value="finalizado" checked> Finalizado</label>
               <label><input type="checkbox" value="andamento" checked> Em andamento</label>
-              <label><input type="checkbox" value="bloqueado" checked> Bloqueado</label>
               <label><input type="checkbox" value="naoiniciado" checked> Não iniciado</label>
             </fieldset>
           </div>
@@ -1197,11 +1194,10 @@ function formatMonthLabel(monthKey) {
 }
 
 function getStatusReportClass(statusValue) {
-  const normalized = String(statusValue || '').trim().toLowerCase();
-  if (normalized.includes('finaliz')) return 'is-done';
-  if (normalized.includes('andamento') || normalized.includes('progresso')) return 'is-progress';
-  if (normalized.includes('bloque')) return 'is-blocked';
-  if (normalized.includes('iniciado')) return 'is-not-started';
+  const normalized = normalizeStatus(statusValue);
+  if (normalized === 'Finalizado') return 'is-done';
+  if (normalized === 'Em andamento') return 'is-progress';
+  if (normalized === 'Não iniciado') return 'is-not-started';
   return '';
 }
 
@@ -1390,12 +1386,20 @@ function loadDailyRows() {
   void syncDailyRowsFromApi(activeDailySystem);
 }
 
+function normalizeStatus(statusValue) {
+  const normalized = String(statusValue || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '');
+  if (normalized.includes('finaliz')) return 'Finalizado';
+  if (normalized.includes('andamento') || normalized.includes('progresso') || normalized.includes('bloque')) return 'Em andamento';
+  if (normalized.includes('nao') && normalized.includes('inici')) return 'Não iniciado';
+  if (normalized.includes('inici')) return 'Não iniciado';
+  return statusValue.trim() || 'Não iniciado';
+}
+
 function getStatusClass(statusValue) {
-  const normalized = String(statusValue || '').trim().toLowerCase();
-  if (normalized.includes('finaliz')) return 'daily-status--done';
-  if (normalized.includes('andamento') || normalized.includes('progresso')) return 'daily-status--progress';
-  if (normalized.includes('bloque')) return 'daily-status--blocked';
-  if (normalized.includes('iniciado')) return 'daily-status--not-started';
+  const normalized = normalizeStatus(statusValue);
+  if (normalized === 'Finalizado') return 'daily-status--done';
+  if (normalized === 'Em andamento') return 'daily-status--progress';
+  if (normalized === 'Não iniciado') return 'daily-status--not-started';
   return '';
 }
 
@@ -1559,50 +1563,65 @@ function renderDailyGrid() {
 
     dailyColumns.forEach((column) => {
       const td = document.createElement('td');
-      td.contentEditable = 'true';
-      td.spellcheck = false;
-      let cellValue = row[column.key] || '';
-      if (column.key === 'prioridade') cellValue = normalizePrioridade(cellValue);
-      if (column.key === 'entrada') {
-        cellValue = normalizeDateCellValue(cellValue || row.prazo);
-      } else if (column.key === 'prazo') {
-        cellValue = normalizeDateCellValue(cellValue);
-      }
-      td.textContent = cellValue;
+      const columnKey = column.key;
       td.dataset.row = String(rowIndex);
-      td.dataset.column = column.key;
+      td.dataset.column = columnKey;
 
-      if (column.key === 'status') {
-        const statusClass = getStatusClass(row[column.key]);
-        if (statusClass) {
-          td.classList.add(statusClass);
-        }
-      }
-
-      td.addEventListener('input', () => {
-        const text = td.textContent || '';
-        updateDailyCell(rowIndex, column.key, text);
-        const suggestions = getDailyColumnSuggestions(column.key, text);
-        showDailyAutocomplete(td, suggestions);
-        if (column.key === 'status') {
-          td.classList.remove('daily-status--done', 'daily-status--progress', 'daily-status--blocked', 'daily-status--not-started');
-          const nextClass = getStatusClass(text);
+      if (columnKey === 'status') {
+        const statusSelect = document.createElement('select');
+        const statusOptions = ['Não iniciado', 'Em andamento', 'Finalizado'];
+        const currentStatus = normalizeStatus(row[columnKey]);
+        statusOptions.forEach((optionLabel) => {
+          const option = document.createElement('option');
+          option.value = optionLabel;
+          option.textContent = optionLabel;
+          if (optionLabel === currentStatus) option.selected = true;
+          statusSelect.appendChild(option);
+        });
+        statusSelect.addEventListener('change', () => {
+          const nextStatus = normalizeStatus(statusSelect.value);
+          statusSelect.value = nextStatus;
+          updateDailyCell(rowIndex, columnKey, nextStatus);
+          td.classList.remove('daily-status--done', 'daily-status--progress', 'daily-status--not-started');
+          const nextClass = getStatusClass(nextStatus);
           if (nextClass) td.classList.add(nextClass);
+          saveDailyRows();
+        });
+        td.appendChild(statusSelect);
+        const statusClass = getStatusClass(currentStatus);
+        if (statusClass) td.classList.add(statusClass);
+      } else {
+        td.contentEditable = 'true';
+        td.spellcheck = false;
+        let cellValue = row[columnKey] || '';
+        if (columnKey === 'prioridade') cellValue = normalizePrioridade(cellValue);
+        if (columnKey === 'entrada') {
+          cellValue = normalizeDateCellValue(cellValue || row.prazo);
+        } else if (columnKey === 'prazo') {
+          cellValue = normalizeDateCellValue(cellValue);
         }
-      });
-      td.addEventListener('keydown', (event) => {
-        handleDailyAutocompleteKey(event, td);
-      });
-      td.addEventListener('focus', () => {
-        const text = td.textContent || '';
-        const suggestions = getDailyColumnSuggestions(column.key, text);
-        showDailyAutocomplete(td, suggestions);
-      });
-      td.addEventListener('blur', () => {
-        hideDailyAutocomplete();
-        saveDailyRows();
-        ensureEmptyTrailingRow(rowIndex);
-      });
+        td.textContent = cellValue;
+
+        td.addEventListener('input', () => {
+          const text = td.textContent || '';
+          updateDailyCell(rowIndex, columnKey, text);
+          const suggestions = getDailyColumnSuggestions(columnKey, text);
+          showDailyAutocomplete(td, suggestions);
+        });
+        td.addEventListener('keydown', (event) => {
+          handleDailyAutocompleteKey(event, td);
+        });
+        td.addEventListener('focus', () => {
+          const text = td.textContent || '';
+          const suggestions = getDailyColumnSuggestions(columnKey, text);
+          showDailyAutocomplete(td, suggestions);
+        });
+        td.addEventListener('blur', () => {
+          hideDailyAutocomplete();
+          saveDailyRows();
+          ensureEmptyTrailingRow(rowIndex);
+        });
+      }
 
       tr.appendChild(td);
     });

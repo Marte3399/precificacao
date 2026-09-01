@@ -432,16 +432,32 @@ body {
   font-weight: 700;
 }
 
-.daily-status--blocked {
-  background: #ef4444 !important;
-  color: #fff;
-  font-weight: 700;
-}
-
 .daily-status--not-started {
   background: #fde68a !important;
   color: #7c5a00;
   font-weight: 700;
+}
+
+.daily-grid td select {
+  width: 100%;
+  height: 100%;
+  border: none;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  text-align: center;
+  cursor: pointer;
+  padding: 4px;
+}
+
+.daily-grid td.daily-status--done select,
+.daily-grid td.daily-status--progress select,
+.daily-grid td.daily-status--not-started select {
+  color: inherit;
+}
+
+.daily-grid td select option {
+  color: var(--text);
 }
 
 .activity-builder__actions {
