@@ -931,7 +931,12 @@ async function importDailyFromWorkbook(file) {
       .filter((row) => !isDailyRowCompletelyEmpty(row))
       .filter((row) => !isDailyIgnoredRow(row));
 
-    const normalized = normalizeDailyRows(mappedRows);
+    let normalized = normalizeDailyRows(mappedRows);
+    if (system.key === 'scode') {
+      normalized.forEach((row) => {
+        row.status = normalizeScodesStatus(row.status);
+      });
+    }
     while (normalized.length < DAILY_MIN_ROWS) {
       normalized.push(createEmptyDailyRow());
     }
@@ -1132,6 +1137,11 @@ async function syncDailyRowsFromApi(systemKey = activeDailySystem) {
     if (systemKey !== activeDailySystem) return;
 
     dailyRows = remoteRows;
+    if (systemKey === 'scode') {
+      dailyRows.forEach((row) => {
+        row.status = normalizeScodesStatus(row.status);
+      });
+    }
     ensureDailyMinimumRows();
     localStorage.setItem(getDailyRowsStorageKey(systemKey), JSON.stringify(dailyRows));
     renderDailyGrid();
@@ -1360,6 +1370,11 @@ function loadDailyRows() {
       const parsed = JSON.parse(storedRowsRaw);
       if (Array.isArray(parsed)) {
         dailyRows = normalizeDailyRows(parsed);
+        if (activeDailySystem === 'scode') {
+          dailyRows.forEach((row) => {
+            row.status = normalizeScodesStatus(row.status);
+          });
+        }
       }
     }
 
@@ -1369,6 +1384,11 @@ function loadDailyRows() {
         const parsedLegacy = JSON.parse(legacyRaw);
         if (Array.isArray(parsedLegacy)) {
           dailyRows = normalizeDailyRows(parsedLegacy);
+          if (activeDailySystem === 'scode') {
+            dailyRows.forEach((row) => {
+              row.status = normalizeScodesStatus(row.status);
+            });
+          }
         }
       }
     }
@@ -1390,6 +1410,14 @@ function normalizeStatus(statusValue) {
   const normalized = String(statusValue || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '');
   if (normalized.includes('nao') && normalized.includes('inici')) return 'Não iniciado';
   if (normalized.includes('andamento') || normalized.includes('progresso') || normalized.includes('bloque')) return 'Em andamento';
+  if (normalized.includes('finaliz')) return 'Finalizado';
+  const trimmed = String(statusValue || '').trim();
+  return trimmed || 'Não iniciado';
+}
+
+function normalizeScodesStatus(statusValue) {
+  const normalized = normalizeStatus(statusValue);
+  if (normalized === 'Não iniciado' || normalized === 'Em andamento') return normalized;
   return 'Finalizado';
 }
 
